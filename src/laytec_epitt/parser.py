@@ -180,22 +180,14 @@ class EpiTTParser(MatchingParser):
                     ["DetReflec", "RLo", "DetWhite"],
                 ):
                     if wl in epitt_data[0].keys():
+                        spectrum = epitt_data[1][datacolname]
                         transient_object = ReflectanceWavelengthTransient()
                         transient_object.wavelength = int(
                             round(float(epitt_data[0][wl]))
                         )  # * ureg("nanometer") #float(epitt_data[0][wl])* ureg('nanometer')
-                        transient_object.wavelength_name = (
-                            wl  # epitt_data[0]["REFLEC_WAVELENGTH"]
-                        )
-                        transient_object.raw_intensity = epitt_data[1][
-                            datacolname
-                        ].apply(lambda x: (x / epitt_data[1][datacolname].values[0]))
-                        transient_object.smoothed_intensity = (
-                            epitt_data[1][datacolname]
-                            .apply(lambda x: (x / epitt_data[1][datacolname].values[0]))
-                            .rolling(30)
-                            .mean()
-                        )
+                        transient_object.wavelength_name = wl
+                        transient_object.raw_intensity = spectrum / spectrum[0]
+                        # smoothed_intesity is processed in the normalizer
                         results.reflectance_wavelengths.append(transient_object)
                 measurement_data.results = [results]
             filetype = "yaml"

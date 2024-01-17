@@ -20,6 +20,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
 
+from statsmodels import api as sm
+
 from nomad.metainfo import (
     Quantity,
     Package,
@@ -69,11 +71,19 @@ class ReflectanceWavelengthTransient(ArchiveSection):
         shape=["*"],
         description="Normalized reflectance wavelength",
     )
+    autocorrelation_period = Quantity(
+        type=np.float64,
+        description="""
+        Parameter for the autocorrelaation function calculation,
+        according to statsmodels.tsa.acf method from statsmodels package
+        """,
+        a_eln={"component": "NumberEditQuantity"},
+    )
     smoothed_intensity = Quantity(
         type=np.dtype(np.float64),
         description="""
-        Normalized reflectance wavelength smoothed with a moving average filter as:
-        data.apply(lambda x: (x / data.values[0])).rolling(30).mean()
+        Normalized reflectance wavelength smoothed 
+        with a autocorrelation algorythm implemented in the statsmodels package.
         """,
         shape=["*"],
     )
@@ -205,6 +215,15 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     "No grown_sample found in GrowthMovpe2.grown_sample.\
                      No sample is referenced in LayTecEpiTTMeasurement. \
                      Please upload a growth process file and reprocess."
+                )
+
+        # noise smoothening
+        for trace in self.results[0].reflectance_wavelengths:
+            if trace.autocorrelation_period:
+                trace.smoothed_intensity = sm.tsa.acf(
+                    trace.raw_intensity,
+                    nlags=trace.autocorrelation_period,
+                    fft=False,
                 )
 
         # plots
