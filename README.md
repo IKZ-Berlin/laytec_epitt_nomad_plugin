@@ -1,8 +1,14 @@
 # IKZ LayTec EpiTT Plugin
 
+See also:
+
+[full IKZ_plugin README](https://github.com/FAIRmat-NFDI/AreaA-data_modeling_and_schemas/tree/main/IKZ_plugin)
+[movpe_IKZ README](https://github.com/FAIRmat-NFDI/AreaA-data_modeling_and_schemas/tree/main/IKZ_plugin/src/movpe_IKZ)
+
+
 ## Overview
 
-This directory contains the LayTec EpiTT IKZ plugin for the NOMAD project.
+This repo contains the LayTec EpiTT IKZ plugin for the NOMAD project.
 
 The LayTec EpiTT IKZ plugin is used to parse and process data related to the LayTec EpiTT monitoring during metal-organic vapor phase epytaxy (MOVPE) process at IKZ.
 
@@ -10,64 +16,50 @@ The LayTec EpiTT IKZ plugin is used to parse and process data related to the Lay
 
 The directory structure is as follows:
 
-- `src/`: This directory contains the source code for the plugin.
-- `tests/`: This directory contains the source code for machine "2" at IKZ.
+```
+laytec_epitt_nomad_plugin
+├── nomad.yaml
+├── src
+│   └── laytec_epitt
+│       ├── nomad_plugin.yaml
+│       ├── parser.py
+│       └── schema.py
+└── tests
+    ├── data
+    │   └── <filename>.dat
+    └── test_schema.py
+```
 
-The `parser.py` file contains the logic for parsing the raw data. This includes reading the data from its original format, extracting the relevant information, and transforming it into a structured format.
 
-The `schema.py` file defines the structure of the data after it has been parsed. It specifies the fields that the structured data will contain and the types of those fields.
+- `src/`: This directory contains the source code of the plugin.
+- `tests/`: This directory contains the tests and template file to use with the plugin.
+- `parser.py` contains the logic for parsing the raw data. This includes reading the data from its original format, extracting the relevant information, and transforming it into a structured format.
+- `schema.py` defines the structure of the data after it has been parsed. It specifies the fields that the structured data will contain and the types of those fields.
+- `nomad_plugin.yaml` defines the raw file matching rules of the parser. Check [NOMAD plugin official docs](https://nomad-lab.eu/prod/v1/staging/docs/howto/customization/plugins_dev.html#parser-plugin-metadata) for more info.
 
 ## Usage
 
-You need to copy and fill the tabular files in `tests/data` folder, then drag and drop them into a new NOMAD upload.
+* You need to have a LayTec file as the one contained in `tests/data` folder, then drag and drop it into a new NOMAD upload.
 
-The available files are:
-
-```
-laytec_epitt_nomad_plugin/tests/data
-└── <filename>.dat
-```
-
+* Follow the raw file matching rules in `src/nomad_plugin.yaml`. A file must:
+  - have .dat extension.
+  - contain the following string `FILETYPE = EpiNet DatArchiver File`. 
 > [!CAUTION]
-> The parser is built to match specific Laytec files, they must:
-> * have .dat extension
-> * contain the following string "FILETYPE = EpiNet DatArchiver File" 
-> If extension is changed or the files are missing some field, they might not be recognized by the parsers.
+> The parser is built to match specific Laytec files. If files extension is changed or they are missing regex matching, they might not be recognized by the parsers.
 
-### `movpe1_growth_parser`
-
-This folder contains two files with custom filename and `.xlsx` extension. Download these file if you use the "MOVPE 1" machine at IKZ.
-
-> [!NOTE]
-> Upload the `constant_parameters.xlsx` file BEFORE the `deposition_control.xlsx` one, otherwise the automated referencing inside the generated entries is not accomplished.
-
-> [!NOTE]
-> `deposition_control.xlsx` contains two sheets: "Deposition Control" and "Precursors". Each row is used to record one experiment, so remember to:
->
-> - Fill the `Constant Parameters ID` with the same ID you write into the `constant_parameters.xlsx` file, in this way the parameters that remain constant across several experiments will be correctly referenced.
-> - Generate one row in "Deposition Control" sheet and in "Precursors" sheet for each growth experiment. They refer to the same sample and hence must contain the same unique `Sample ID`. An error will be thrown if the rows in the two sheets contain different `Sample ID` fields.
-
-> [!NOTE]
-> After uploading the `constant_parameters.xlsx` and `deposition_control.xlsx` files, please open `RawFileConstantParameters` and `RawFileDepositionControl` generated entries in NOMAD to check if there is some processing error. Carefully analize any warning or error and upload the file again if needed.
-
-### `movpe2_growth_parser`
-
-This folder contains one file with custom filename and `.growth.movpe.ikz.xlsx` extension. Download these file if you use the "MOVPE 2" machine at IKZ.
-
-### `substrate_parser`
-
-This folder contains one file with custom filename and `.substrates.movpe.ikz.xlsx` extension. Download these files to record info on Substrate used for both "MOVPE 1" and "MOVPE 2" machines at IKZ.
-
+* If the LayTec file contains a `RUN_ID` parameter that matches another existing entry for the growth process, the sample created during the growth process will be linked automatically in the LayTec mesurement entry, too. To create a growth process archive, install the IKZ_plugin and follow the [documentation of MOVPE_IKZ package](https://github.com/FAIRmat-NFDI/AreaA-data_modeling_and_schemas/tree/main/IKZ_plugin/src/movpe_IKZ).
 
 
 ## Installation
 
-To use these plugins, you need to:
+To use this package, you need to:
 
-* add the `src/` directory to your `PYTHONPATH`. You can do this by running the following command in the terminal where you run NOMAD:
-```sh
-export PYTHONPATH="$PYTHONPATH:/your/path/IKZ_plugin/src"
+* add the `src/` directory to your `PYTHONPATH`. You can do this by running the following command in the terminal where you run NOMAD (`nomad admin run appworker`):
+
+```bash
+export PYTHONPATH="$PYTHONPATH:/your/path/laytec_epitt_nomad_plugin/src"
 ```
+
 Export this system variable in the same terminal where you run NOMAD (`nomad admin run appworker`).
 
 To make this path persistent, write into the .pyenv/bin/activate file of your virtual environment. Use the path of your local OS where you cloned this repository.
@@ -76,33 +68,33 @@ To make this path persistent, write into the .pyenv/bin/activate file of your vi
 ```yaml
 plugins:
   include:
-    - 'parsers/movpe_growth_IKZ'
+    - 'parsers/laytec_epitt'
 ```
 The name after the `/` is user defined.
 Then, specify the Python package for the plugin in the options section:
 ```yaml
 options:
-  parsers/movpe_growth_IKZ:
-    python_package: movpe_IKZ.binaryoxides_growth_parser
+  parsers/laytec_epitt:
+    python_package: laytec_epitt
 ```
 
 This plugin requires to clone in your local machines other plugin repositories:
 
 ```sh
+git clone https://github.com/IKZ-Berlin/laytec_epitt_nomad_plugin.git
 git clone https://github.com/FAIRmat-NFDI/nomad-measurements
 git clone https://github.com/FAIRmat-NFDI/nomad-material-processing
-git clone https://github.com/FAIRmat-NFDI/AreaA-data_modeling_and_schemas/tree/main/hall
-git clone https://github.com/FAIRmat-NFDI/AreaA-data_modeling_and_schemas/tree/main/LayTec_EpiTT
+git clone https://github.com/FAIRmat-NFDI/AreaA-data_modeling_and_schemas
 ```
 
 Consequentlty, other paths must be appended to `PYTHONPATH` system variable:
 
 ```sh
 export MYPATH=/your/path
-export PYTHONPATH=$PYTHONPATH:$MYPATH/PLUGINS/nomad-measurements/src
-export PYTHONPATH=$PYTHONPATH:$MYPATH/PLUGINS/nomad-measurements/src/nomad_measurements
-export PYTHONPATH=$PYTHONPATH:$MYPATH/AreaA-data_modeling_and_schemas/hall/Lakeshore_plugin
-export PYTHONPATH=$PYTHONPATH:$MYPATH/AreaA-data_modeling_and_schemas/LayTec_EpiTT/laytec_epitt_plugin/src
+export PYTHONPATH=$PYTHONPATH:$MYPATH/laytec_epitt_nomad_plugin/src
+export PYTHONPATH=$PYTHONPATH:$MYPATH/nomad-measurements/src
+export PYTHONPATH=$PYTHONPATH:$MYPATH/nomad-measurements/src/nomad_measurements
+export PYTHONPATH=$PYTHONPATH:$MYPATH/nomad-material-processing/src
 export PYTHONPATH=$PYTHONPATH:$MYPATH/AreaA-data_modeling_and_schemas/IKZ_plugin/src
 ```
 
@@ -113,32 +105,22 @@ plugins:
   include:
     - 'schemas/nomad_measurements'
     - 'schemas/nomad_material_processing'
-    - 'parsers/hall_lakeshore_measurement'
-    - 'parsers/hall_lakeshore_instrument'
     - 'parsers/laytec_epitt'
     - 'schemas/basesections_IKZ'
-    - 'parsers/cz_IKZ'
     - 'parsers/movpe_2_IKZ'
     - 'parsers/movpe_1_deposition_control_IKZ'
     - 'parsers/movpe_1_IKZ'
     - 'parsers/movpe_substrates_IKZ'
-    - 'parsers/ds_IKZ'
 
   options:
     schemas/nomad_measurements:
       python_package: nomad_measurements
     schemas/nomad_material_processing:
       python_package: nomad_material_processing
-    parsers/hall_lakeshore_measurement:
-      python_package: lakeshore.measurement_parser
-    parsers/hall_lakeshore_instrument:
-      python_package: lakeshore.instrument_parser
     parsers/laytec_epitt:
       python_package: laytec_epitt
     schemas/basesections_IKZ:
       python_package: basesections_IKZ
-    parsers/cz_IKZ:
-      python_package: cz_IKZ
     parsers/movpe_2_IKZ:
       python_package: movpe_IKZ.movpe2_growth_parser
     parsers/movpe_1_deposition_control_IKZ:
@@ -147,6 +129,4 @@ plugins:
       python_package: movpe_IKZ.movpe1_growth_parser.constant_parameters
     parsers/movpe_substrates_IKZ:
      python_package: movpe_IKZ.substrate_parser
-    parsers/ds_IKZ:
-      python_package: ds_IKZ
 ```
