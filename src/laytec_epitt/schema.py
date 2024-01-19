@@ -18,6 +18,7 @@
 import numpy as np
 import pandas as pd
 import plotly.express as px
+from plotly.subplots import make_subplots
 import plotly.graph_objs as go
 
 from statsmodels import api as sm
@@ -228,31 +229,38 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
 
         # plots
         if self.results[0]:
-            figures_list = []
+            figure1 = make_subplots(
+                rows=2, cols=1, subplot_titles=["Normalized Reflectance", "Temperature"]
+            )
             temperature_figure = px.scatter(
                 x=self.results[0].process_time,
                 y=self.results[0].pyrometer_temperature,
-                color=self.results[0].pyrometer_temperature,
+                # color=self.results[0].pyrometer_temperature,
                 title="Temperature",
             )
-            temperature_figure.update_traces(mode="markers", marker={"size": 3})
+            temperature_figure.update_traces(mode="markers", marker={"size": 2})
             temperature_figure.update_xaxes(title_text="Time [s]")
             temperature_figure.update_yaxes(title_text="Temperature [°C]")
-            figures_list.append(
-                PlotlyFigure(
-                    label="Temperature",
-                    index=1,
-                    figure=temperature_figure.to_plotly_json(),
-                )
-            )
+            figure1.add_trace(temperature_figure.data[0], row=2, col=1)
             reflectance_figure = go.Figure(
-                config={"displayModeBar": True, "scrollZoom": True}
+                # config={"displayModeBar": True, "scrollZoom": True}
             )
+            ref_fig = make_subplots(rows=1, cols=1)
             for i, _ in enumerate(self.results[0].reflectance_wavelengths):
                 single_reflectance_figure = go.Figure(
-                    config={"displayModeBar": True, "scrollZoom": True}
+                    # config={"displayModeBar": True, "scrollZoom": True}
                 )
                 single_reflectance_figure.add_trace(
+                    go.Scatter(
+                        x=self.results[0].process_time.magnitude,
+                        y=self.results[0].reflectance_wavelengths[i].raw_intensity,
+                        mode="lines+markers",
+                        line={"width": 2},
+                        marker={"size": 2},
+                        name="Normalized",
+                    )
+                )
+                ref_fig.add_trace(
                     go.Scatter(
                         x=self.results[0].process_time.magnitude,
                         y=self.results[0].reflectance_wavelengths[i].raw_intensity,
@@ -286,13 +294,13 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 single_reflectance_figure.update_layout(
                     showlegend=True,
                 )
-                graph = PlotlyFigure(
-                    label=f"{self.results[0].reflectance_wavelengths[i].wavelength} nm",
-                    index=i + 2,
-                    figure=single_reflectance_figure.to_plotly_json(),
-                )
-                figures_list.append(graph)
-                self.results[0].reflectance_wavelengths[i].figures = [graph]
+                self.results[0].reflectance_wavelengths[i].figures = [
+                    PlotlyFigure(
+                        label=f"{self.results[0].reflectance_wavelengths[i].wavelength} nm",
+                        index=i + 2,
+                        figure=single_reflectance_figure.to_plotly_json(),
+                    )
+                ]
                 if (
                     self.results[0].reflectance_wavelengths[i].smoothed_intensity
                     is not None
@@ -314,20 +322,38 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     mode="lines+markers", line={"width": 2}, marker={"size": 2}
                 )
                 reflectance_figure.update_xaxes(title_text="Time [s]")
-                reflectance_figure.update_yaxes(
-                    title_text="(Autocorrelated) Reflectance"
-                )
+                reflectance_figure.update_yaxes(title_text="Normalized Reflectance")
                 reflectance_figure.update_layout(
                     showlegend=True,
                 )
-            figures_list.append(
-                PlotlyFigure(
-                    label="Reflectance",
-                    index=0,
-                    figure=reflectance_figure.to_plotly_json(),
-                )
+                for trace in ref_fig.data:
+                    figure1.add_trace(trace, row=1, col=1)
+
+            figure1.update_layout(
+                # title_text="Reflectance",
+                # showlegend=True,
+                # legend=dict(
+                #     x=0.2,  # Adjust these values to place the legend where you want
+                #     y=0.2,
+                #     bgcolor="rgba(255, 255, 255, 0)",  # Transparent background
+                #     bordercolor="rgba(255, 255, 255, 0)",  # Transparent border
+                showlegend=True,
             )
-            self.figures = figures_list
+            # figure1.add_annotation(
+            #     x=self.results[0].process_time.magnitude[1000],
+            #     y=self.results[0].reflectance_wavelengths[i].raw_intensity[1000],
+            #     xref="x",
+            #     yref="y",
+            #     text="Annotation Text",
+            #     showarrow=True,
+            #     arrowhead=7,
+            #     ax=0,
+            #     ay=-40,
+            # )
+
+            self.figures = [
+                PlotlyFigure(label="figure 1", figure=figure1.to_plotly_json())
+            ]
 
 
 #            if self.process.reference:
