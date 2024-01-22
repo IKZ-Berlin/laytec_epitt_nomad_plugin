@@ -72,15 +72,34 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
         shape=["*"],
         description="Normalized reflectance wavelength",
     )
-    autocorrelation_period = Quantity(
-        type=np.float64,
+    total_line_number = Quantity(
+        type=np.dtype(np.int64),
         description="""
-        Parameter for the autocorrelaation function calculation,
+        The total line number found in the LayTec EpiTT data file.
+        This will help setting the correct autocorrelation starting point and autocorrelation period.
+        """,
+    )
+    autocorrelation_starting_point = Quantity(
+        type=np.int64,
+        default=0,
+        description="""
+        Add this parameter and save to smoothen the reflectance trace.
+        Starting point of the window chosen for the autocorrelaation function calculation,
         according to statsmodels.tsa.acf method from statsmodels package
         """,
         a_eln={"component": "NumberEditQuantity"},
     )
-    smoothed_intensity = Quantity(
+    autocorrelation_period = Quantity(
+        type=np.int64,
+        default=4500,
+        description="""
+        Add this parameter and save to smoothen the reflectance trace.
+        Period of the window chosen for the autocorrelaation function calculation,
+        according to statsmodels.tsa.acf method from statsmodels package
+        """,
+        a_eln={"component": "NumberEditQuantity"},
+    )
+    autocorrelated_intensity = Quantity(
         type=np.dtype(np.float64),
         description="""
         Normalized reflectance wavelength smoothed
@@ -220,116 +239,106 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
 
         # noise smoothening with autocorrelated function
         for trace in self.results[0].reflectance_wavelengths:
-            if trace.autocorrelation_period:
-                trace.smoothed_intensity = sm.tsa.acf(
-                    trace.raw_intensity,
+            trace.total_line_number = len(trace.raw_intensity)
+            if (
+                trace.autocorrelation_period is not None
+                and trace.autocorrelation_starting_point is not None
+            ):
+                trace.autocorrelated_intensity = sm.tsa.acf(
+                    trace.raw_intensity[trace.autocorrelation_starting_point :],
                     nlags=trace.autocorrelation_period,
                     fft=False,
                 )
 
         # plots
         if self.results[0]:
-            figure1 = make_subplots(
-                rows=2, cols=1, subplot_titles=["Normalized Reflectance", "Temperature"]
+            overview_fig = make_subplots(
+                rows=2, cols=1, subplot_titles=["Reflectance", "Temperature"]
             )
             temperature_figure = px.scatter(
                 x=self.results[0].process_time,
                 y=self.results[0].pyrometer_temperature,
                 # color=self.results[0].pyrometer_temperature,
-                title="Temperature",
+                title="Temp.",
             )
             temperature_figure.update_traces(mode="markers", marker={"size": 2})
             temperature_figure.update_xaxes(title_text="Time [s]")
             temperature_figure.update_yaxes(title_text="Temperature [°C]")
-            figure1.add_trace(temperature_figure.data[0], row=2, col=1)
-            reflectance_figure = go.Figure(
-                # config={"displayModeBar": True, "scrollZoom": True}
-            )
-            ref_fig = make_subplots(rows=1, cols=1)
+            overview_fig.add_trace(temperature_figure.data[0], row=2, col=1)
+            multi_reflec_fig = make_subplots(rows=1, cols=1)
             for i, _ in enumerate(self.results[0].reflectance_wavelengths):
-                single_reflectance_figure = go.Figure(
+                reflec_fig = go.Figure(
                     # config={"displayModeBar": True, "scrollZoom": True}
                 )
-                single_reflectance_figure.add_trace(
+                reflec_fig.add_trace(
                     go.Scatter(
                         x=self.results[0].process_time.magnitude,
                         y=self.results[0].reflectance_wavelengths[i].raw_intensity,
                         mode="lines+markers",
                         line={"width": 2},
                         marker={"size": 2},
-                        name="Normalized",
+                        name=f"{self.results[0].reflectance_wavelengths[i].wavelength.magnitude} nm",
                     )
                 )
-                ref_fig.add_trace(
+                multi_reflec_fig.add_trace(
                     go.Scatter(
                         x=self.results[0].process_time.magnitude,
                         y=self.results[0].reflectance_wavelengths[i].raw_intensity,
                         mode="lines+markers",
                         line={"width": 2},
                         marker={"size": 2},
-                        name="Normalized",
+                        name=f"{self.results[0].reflectance_wavelengths[i].wavelength.magnitude} nm",
                     )
                 )
                 if (
-                    self.results[0].reflectance_wavelengths[i].smoothed_intensity
+                    self.results[0].reflectance_wavelengths[i].autocorrelated_intensity
                     is not None
                     and self.results[0]
                     .reflectance_wavelengths[i]
-                    .smoothed_intensity.any()
+                    .autocorrelated_intensity.any()
                 ):
-                    single_reflectance_figure.add_trace(
+                    reflec_fig.add_trace(
                         go.Scatter(
                             x=self.results[0].process_time.magnitude,
                             y=self.results[0]
                             .reflectance_wavelengths[i]
-                            .smoothed_intensity,
+                            .autocorrelated_intensity,
                             mode="lines+markers",
                             line={"width": 2},
                             marker={"size": 2},
-                            name="Smoothed Normalized",
+                            name=f"Autocorr. {self.results[0].reflectance_wavelengths[i].wavelength.magnitude} nm",
                         )
                     )
-                single_reflectance_figure.update_xaxes(title_text="Time [s]")
-                single_reflectance_figure.update_yaxes(title_text="Reflectance")
-                single_reflectance_figure.update_layout(
+                    multi_reflec_fig.add_trace(
+                        go.Scatter(
+                            x=self.results[0].process_time.magnitude,
+                            y=self.results[0]
+                            .reflectance_wavelengths[i]
+                            .autocorrelated_intensity,
+                            mode="lines+markers",
+                            line={"width": 2},
+                            marker={"size": 2},
+                            name=f"Autocorr. {self.results[0].reflectance_wavelengths[i].wavelength.magnitude} nm",
+                        )
+                    )
+                reflec_fig.update_xaxes(title_text="Time [s]")
+                reflec_fig.update_yaxes(title_text="Reflectance")
+                reflec_fig.update_layout(
+                    height=500,
+                    # width=800,
                     showlegend=True,
                 )
                 self.results[0].reflectance_wavelengths[i].figures = [
                     PlotlyFigure(
-                        label=f"{self.results[0].reflectance_wavelengths[i].wavelength} nm",
-                        index=i + 2,
-                        figure=single_reflectance_figure.to_plotly_json(),
+                        label=f"{self.results[0].reflectance_wavelengths[i].wavelength.magnitude} nm",
+                        index=1,
+                        figure=reflec_fig.to_plotly_json(),
                     )
                 ]
-                if (
-                    self.results[0].reflectance_wavelengths[i].smoothed_intensity
-                    is not None
-                    and self.results[0]
-                    .reflectance_wavelengths[i]
-                    .smoothed_intensity.any()
-                ):
-                    reflectance_figure.add_trace(
-                        go.Scatter(
-                            x=self.results[0].process_time.magnitude,
-                            y=self.results[0]
-                            .reflectance_wavelengths[i]
-                            .smoothed_intensity,
-                            name=f"{self.results[0].reflectance_wavelengths[i].wavelength} nm",
-                            mode="lines",
-                        )
-                    )
-                reflectance_figure.update_traces(
-                    mode="lines+markers", line={"width": 2}, marker={"size": 2}
-                )
-                reflectance_figure.update_xaxes(title_text="Time [s]")
-                reflectance_figure.update_yaxes(title_text="Normalized Reflectance")
-                reflectance_figure.update_layout(
-                    showlegend=True,
-                )
-                for trace in ref_fig.data:
-                    figure1.add_trace(trace, row=1, col=1)
+            for trace in multi_reflec_fig.data:
+                overview_fig.add_trace(trace, row=1, col=1)
 
-            figure1.update_layout(
+            overview_fig.update_layout(
                 # title_text="Reflectance",
                 # showlegend=True,
                 # legend=dict(
@@ -337,9 +346,11 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 #     y=0.2,
                 #     bgcolor="rgba(255, 255, 255, 0)",  # Transparent background
                 #     bordercolor="rgba(255, 255, 255, 0)",  # Transparent border
+                height=2500,
+                # width=800,
                 showlegend=True,
             )
-            # figure1.add_annotation(
+            # overview_fig.add_annotation(
             #     x=self.results[0].process_time.magnitude[1000],
             #     y=self.results[0].reflectance_wavelengths[i].raw_intensity[1000],
             #     xref="x",
@@ -352,7 +363,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
             # )
 
             self.figures = [
-                PlotlyFigure(label="figure 1", figure=figure1.to_plotly_json())
+                PlotlyFigure(label="figure 1", figure=overview_fig.to_plotly_json())
             ]
 
 
