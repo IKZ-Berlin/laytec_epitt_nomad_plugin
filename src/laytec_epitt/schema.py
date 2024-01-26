@@ -39,6 +39,9 @@ from nomad.datamodel.metainfo.basesections import (
     MeasurementResult,
     CompositeSystemReference,
 )
+from nomad.datamodel.metainfo.annotations import (
+    ELNAnnotation,
+)
 from nomad.datamodel.metainfo.plot import PlotSection, PlotlyFigure
 
 from nomad_measurements import (
@@ -178,11 +181,10 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
     )
     description = Quantity(
         type=str,
-        description="""
-        Notes and description of the current entry.
-        """,
-        a_eln=dict(
+        description="description",
+        a_eln=ELNAnnotation(
             component="StringEditQuantity",
+            label="Notes",
         ),
     )
     method = Quantity(
