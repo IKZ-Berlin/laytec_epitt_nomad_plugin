@@ -248,116 +248,132 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
         # plots
         if self.results[0]:
             overview_fig = make_subplots(
-                rows=3,
+                rows=2,
                 cols=1,
-                subplot_titles=[
-                    "Reflectance",
-                    "Autocorrelated Reflectance",
-                    "Temperature",
-                ],
+                shared_xaxes=True,
+                vertical_spacing=0.07,
+                subplot_titles=["Reflectance", "Temperature"],
             )
-            overview_fig_test = go.Figure()
 
-            temperature_figure = px.scatter(
+            temperature_object = go.Scattergl(
                 x=self.results[0].process_time,
                 y=self.results[0].pyrometer_temperature,
                 # color=self.results[0].pyrometer_temperature,
-                title="Temp.",
+                mode="lines+markers",
+                line={"width": 2},
+                marker={"size": 2},
+                showlegend=False,
             )
-            temperature_figure.update_traces(mode="markers", marker={"size": 2})
-            temperature_figure.update_xaxes(title_text="Time [s]")
-            temperature_figure.update_yaxes(title_text="Temperature [°C]")
-            overview_fig.append_trace(temperature_figure.data[0], row=3, col=1)
-            for i, trace in enumerate(self.results[0].reflectance_wavelengths):
+            overview_fig.add_trace(temperature_object, row=2, col=1)
+            for trace in self.results[0].reflectance_wavelengths:
                 single_trace_fig = make_subplots(
                     rows=2,
                     cols=1,
-                    subplot_titles=["Reflectance", "Autocorrelated Reflectance"],
+                    # shared_xaxes=True,
+                    vertical_spacing=0.025,
+                    subplot_titles=["Reflectance"],
                 )
-                go_object = go.Scatter(
-                    x=self.results[0].process_time.magnitude[start : (start + period)],
-                    y=trace.raw_intensity[start : (start + period)],
-                    mode="lines+markers",
-                    line={"width": 2},
-                    marker={"size": 2},
-                    name=f"{trace.wavelength.magnitude} nm",
-                )
-                single_trace_fig.append_trace(
-                    go_object,
-                    row=1,
-                    col=1,
-                )
-                go_object = go.Scatter(
-                    x=self.results[0].process_time.magnitude,
+                go_object = go.Scattergl(
+                    x=self.results[0].process_time,
                     y=trace.raw_intensity,
                     mode="lines+markers",
                     line={"width": 2},
                     marker={"size": 2},
+                    # marker=dict(
+                    #     color=np.log10(self.results[0].intensity),
+                    #     colorscale="inferno",
+                    #     line_width=0,
+                    #     showscale=True,
+                    # ),
                     name=f"{trace.wavelength.magnitude} nm",
                 )
-                # px_object = px.line(
-                #     x=self.results[0].process_time.magnitude,
-                #     y=trace.raw_intensity,
-                #     markers=True,
-                #     title=f"{trace.wavelength.magnitude} nm",
-                #     width=800,
-                #     height=800,
-                # )
-                overview_fig.append_trace(
+                x_slice = self.results[0].process_time[0:2000]
+                y_slice = trace.raw_intensity[0:2000]
+                go_object_slice = go.Scattergl(
+                    x=x_slice,
+                    y=y_slice,
+                    mode="lines+markers",
+                    line={"width": 2},
+                    marker={"size": 2},
+                    # marker=dict(
+                    #     color=np.log10(self.results[0].intensity),
+                    #     colorscale="inferno",
+                    #     line_width=0,
+                    #     showscale=True,
+                    # ),
+                    name=f"{trace.wavelength.magnitude} nm",
+                )
+                single_trace_fig.add_trace(
+                    go_object_slice,  # go_object,
+                    row=1,
+                    col=1,
+                )
+                overview_fig.add_trace(
                     go_object,
                     row=1,
                     col=1,
                 )
-                overview_fig.update_traces(line=dict(width=2))
-                overview_fig_test.add_trace(go_object)
-
                 if (
                     trace.autocorrelated_intensity is not None
                     and trace.autocorrelated_intensity.any()
                 ):
-                    go_object = go.Scatter(
-                        x=self.results[0].process_time.magnitude[
-                            start : (start + period)
-                        ],
-                        y=trace.autocorrelated_intensity[start : (start + period)],
-                        mode="lines+markers",
-                        line={"width": 2},
-                        marker={"size": 2},
-                        name=f"Autocorr. {trace.wavelength.magnitude} nm",
-                    )
-                    single_trace_fig.append_trace(
-                        go_object,
-                        row=2,
-                        col=1,
-                    )
-                    go_object = go.Scatter(
-                        x=self.results[0].process_time.magnitude,
+                    go_object = go.Scattergl(
+                        x=self.results[0].process_time,
                         y=trace.autocorrelated_intensity,
                         mode="lines+markers",
                         line={"width": 2},
                         marker={"size": 2},
                         name=f"Autocorr. {trace.wavelength.magnitude} nm",
                     )
-                    # px_object = px.line(
-                    #     x=self.results[0].process_time.magnitude,
-                    #     y=trace.autocorrelated_intensity,
-                    #     markers=True,
-                    #     title=f"Autocorr. {trace.wavelength.magnitude} nm",
-                    #     width=800,
-                    #     height=800,
-                    # )
-                    overview_fig.append_trace(
+                    single_trace_fig.add_trace(
                         go_object,
                         row=2,
                         col=1,
                     )
-                    overview_fig_test.add_trace(go_object)
-                single_trace_fig.update_xaxes(title_text="Time [s]")
-                single_trace_fig.update_yaxes(title_text="Reflectance")
+
                 single_trace_fig.update_layout(
                     height=1200,
                     width=600,
                     showlegend=False,
+                    dragmode="pan",
+                    # xaxis={"range": [start, start + period], "fixedrange": True},
+                    # xaxis2={"range": [start, start + period], "fixedrange": True},
+                    # yaxis={"fixedrange": False},
+                    # yaxis2={"fixedrange": False},
+                )
+                single_trace_fig.update_xaxes(
+                    range=(0, 2000),  # [start, start + period],
+                    fixedrange=True,
+                    constrain="domain",
+                    matches="x",
+                    showticklabels=False,
+                    row=1,
+                    col=1,
+                )
+                single_trace_fig.update_xaxes(
+                    range=(0, 2000),  # [start, start + period],
+                    fixedrange=True,
+                    constrain="domain",
+                    matches="x",
+                    ticks="outside",
+                    ticklen=5,
+                    showticklabels=True,
+                    title_text="Time [s]",
+                    row=2,
+                    col=1,
+                )
+                single_trace_fig.update_yaxes(
+                    title_text="Intensity [a. u.]",
+                    row=1,
+                    col=1,
+                )
+                single_trace_fig.update_yaxes(
+                    fixedrange=False,
+                    ticks="outside",
+                    ticklen=5,
+                    title_text="Autocorrelated Int. [a. u.]",
+                    row=2,
+                    col=1,
                 )
                 single_trace_fig_json = single_trace_fig.to_plotly_json()
                 single_trace_fig_json["config"] = {
@@ -378,20 +394,16 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 # width=800,
                 showlegend=True,
             )
-            # overview_fig_json = overview_fig.to_plotly_json()
-            overview_fig_json = overview_fig_test.to_plotly_json()
-            # for subplot in overview_fig_json["data"]:
-            #     subplot["config"] = {
-            #         "displayModeBar": False,
-            #         "scrollZoom": False,
-            #         "responsive": False,
-            #         "displaylogo": False,
-            #     }
+            overview_fig.update_yaxes(title_text="Intensity [a.u.]", row=1, col=1)
+            overview_fig.update_xaxes(title_text="Time [s]", row=2, col=1)
+            overview_fig.update_yaxes(title_text="T [°C]", row=2, col=1)
+            overview_fig_json = overview_fig.to_plotly_json()
             overview_fig_json["config"] = {
-                "displayModeBar": False,
                 "scrollZoom": False,
                 "responsive": False,
                 "displaylogo": False,
+                "staticPlot": True,
+                "dragmode": False,
             }
             self.figures = [PlotlyFigure(label="figure 1", figure=overview_fig_json)]
 
