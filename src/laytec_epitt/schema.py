@@ -232,20 +232,16 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
 
         # noise smoothening with autocorrelated function
         for trace in self.results[0].reflectance_wavelengths:
-            trace.autocorrelation_starting_point = 0
-            trace.autocorrelation_period = len(trace.raw_intensity)
-            if (
-                trace.autocorrelation_period is not None
-                and trace.autocorrelation_starting_point is not None
-            ):
+            if not getattr(trace, "autocorrelation_starting_point"):
+                setattr(trace, "autocorrelation_starting_point", 0)
+            if not getattr(trace, "autocorrelation_period"):
+                setattr(trace, "autocorrelation_period", len(trace.raw_intensity))
+            start = trace.autocorrelation_starting_point
+            period = trace.autocorrelation_period
+            if period is not None and start is not None:
                 trace.autocorrelated_intensity = sm.tsa.acf(
-                    trace.raw_intensity[
-                        trace.autocorrelation_starting_point : (
-                            trace.autocorrelation_starting_point
-                            + trace.autocorrelation_period
-                        )
-                    ],
-                    nlags=trace.autocorrelation_period,
+                    trace.raw_intensity[start : (start + period)],
+                    nlags=period,
                     fft=False,
                 )
 
@@ -260,6 +256,8 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     "Temperature",
                 ],
             )
+            overview_fig_test = go.Figure()
+
             temperature_figure = px.scatter(
                 x=self.results[0].process_time,
                 y=self.results[0].pyrometer_temperature,
@@ -269,95 +267,105 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
             temperature_figure.update_traces(mode="markers", marker={"size": 2})
             temperature_figure.update_xaxes(title_text="Time [s]")
             temperature_figure.update_yaxes(title_text="Temperature [°C]")
-            overview_fig.add_trace(temperature_figure.data[0], row=3, col=1)
-            multi_reflec_fig = make_subplots(rows=1, cols=1)
-            multi_reflec_autocorr_fig = make_subplots(rows=2, cols=1)
+            overview_fig.append_trace(temperature_figure.data[0], row=3, col=1)
             for i, trace in enumerate(self.results[0].reflectance_wavelengths):
                 single_trace_fig = make_subplots(
                     rows=2,
                     cols=1,
                     subplot_titles=["Reflectance", "Autocorrelated Reflectance"],
                 )
-                single_trace_fig.add_trace(
-                    go.Scatter(
-                        x=self.results[0].process_time.magnitude[
-                            trace.autocorrelation_starting_point : (
-                                trace.autocorrelation_starting_point
-                                + trace.autocorrelation_period
-                            )
-                        ],
-                        y=trace.raw_intensity[
-                            trace.autocorrelation_starting_point : (
-                                trace.autocorrelation_starting_point
-                                + trace.autocorrelation_period
-                            )
-                        ],
-                        mode="lines+markers",
-                        line={"width": 2},
-                        marker={"size": 2},
-                        name=f"{trace.wavelength.magnitude} nm",
-                    ),
+                go_object = go.Scatter(
+                    x=self.results[0].process_time.magnitude[start : (start + period)],
+                    y=trace.raw_intensity[start : (start + period)],
+                    mode="lines+markers",
+                    line={"width": 2},
+                    marker={"size": 2},
+                    name=f"{trace.wavelength.magnitude} nm",
+                )
+                single_trace_fig.append_trace(
+                    go_object,
                     row=1,
                     col=1,
                 )
-                multi_reflec_fig.add_trace(
-                    go.Scatter(
-                        x=self.results[0].process_time.magnitude,
-                        y=trace.raw_intensity,
-                        mode="lines+markers",
-                        line={"width": 2},
-                        marker={"size": 2},
-                        name=f"{trace.wavelength.magnitude} nm",
-                    )
+                go_object = go.Scatter(
+                    x=self.results[0].process_time.magnitude,
+                    y=trace.raw_intensity,
+                    mode="lines+markers",
+                    line={"width": 2},
+                    marker={"size": 2},
+                    name=f"{trace.wavelength.magnitude} nm",
                 )
+                # px_object = px.line(
+                #     x=self.results[0].process_time.magnitude,
+                #     y=trace.raw_intensity,
+                #     markers=True,
+                #     title=f"{trace.wavelength.magnitude} nm",
+                #     width=800,
+                #     height=800,
+                # )
+                overview_fig.append_trace(
+                    go_object,
+                    row=1,
+                    col=1,
+                )
+                overview_fig.update_traces(line=dict(width=2))
+                overview_fig_test.add_trace(go_object)
+
                 if (
                     trace.autocorrelated_intensity is not None
                     and trace.autocorrelated_intensity.any()
                 ):
-                    single_trace_fig.add_trace(
-                        go.Scatter(
-                            x=self.results[0].process_time.magnitude[
-                                trace.autocorrelation_starting_point : (
-                                    trace.autocorrelation_starting_point
-                                    + trace.autocorrelation_period
-                                )
-                            ],
-                            y=trace.autocorrelated_intensity[
-                                trace.autocorrelation_starting_point : (
-                                    trace.autocorrelation_starting_point
-                                    + trace.autocorrelation_period
-                                )
-                            ],
-                            mode="lines+markers",
-                            line={"width": 2},
-                            marker={"size": 2},
-                            name=f"Autocorr. {trace.wavelength.magnitude} nm",
-                        ),
+                    go_object = go.Scatter(
+                        x=self.results[0].process_time.magnitude[
+                            start : (start + period)
+                        ],
+                        y=trace.autocorrelated_intensity[start : (start + period)],
+                        mode="lines+markers",
+                        line={"width": 2},
+                        marker={"size": 2},
+                        name=f"Autocorr. {trace.wavelength.magnitude} nm",
+                    )
+                    single_trace_fig.append_trace(
+                        go_object,
                         row=2,
                         col=1,
                     )
-                    multi_reflec_autocorr_fig.add_trace(
-                        go.Scatter(
-                            x=self.results[0].process_time.magnitude,
-                            y=trace.autocorrelated_intensity,
-                            mode="lines+markers",
-                            line={"width": 2},
-                            marker={"size": 2},
-                            name=f"Autocorr. {trace.wavelength.magnitude} nm",
-                        )
+                    go_object = go.Scatter(
+                        x=self.results[0].process_time.magnitude,
+                        y=trace.autocorrelated_intensity,
+                        mode="lines+markers",
+                        line={"width": 2},
+                        marker={"size": 2},
+                        name=f"Autocorr. {trace.wavelength.magnitude} nm",
                     )
+                    # px_object = px.line(
+                    #     x=self.results[0].process_time.magnitude,
+                    #     y=trace.autocorrelated_intensity,
+                    #     markers=True,
+                    #     title=f"Autocorr. {trace.wavelength.magnitude} nm",
+                    #     width=800,
+                    #     height=800,
+                    # )
+                    overview_fig.append_trace(
+                        go_object,
+                        row=2,
+                        col=1,
+                    )
+                    overview_fig_test.add_trace(go_object)
                 single_trace_fig.update_xaxes(title_text="Time [s]")
                 single_trace_fig.update_yaxes(title_text="Reflectance")
                 single_trace_fig.update_layout(
-                    height=500,
-                    # width=800,
-                    showlegend=True,
+                    height=1200,
+                    width=600,
+                    showlegend=False,
                 )
                 single_trace_fig_json = single_trace_fig.to_plotly_json()
-                # single_trace_fig_json["config"] = {
-                #     "displayModeBar": True,
-                #     "scrollZoom": True,
-                # }
+                single_trace_fig_json["config"] = {
+                    "displayModeBar": True,
+                    "scrollZoom": True,
+                    "responsive": False,
+                    "displaylogo": False,
+                }
                 trace.figures = [
                     PlotlyFigure(
                         label=f"{trace.wavelength.magnitude} nm",
@@ -365,38 +373,26 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                         figure=single_trace_fig_json,
                     )
                 ]
-            for trace in multi_reflec_fig.data:
-                overview_fig.add_trace(trace, row=1, col=1)
-            for trace in multi_reflec_autocorr_fig.data:
-                overview_fig.add_trace(trace, row=2, col=1)
-
             overview_fig.update_layout(
-                # title_text="Reflectance",
-                # showlegend=True,
-                # legend=dict(
-                #     x=0.2,  # Adjust these values to place the legend where you want
-                #     y=0.2,
-                #     bgcolor="rgba(255, 255, 255, 0)",  # Transparent background
-                #     bordercolor="rgba(255, 255, 255, 0)",  # Transparent border
-                height=4000,
+                height=1800,
                 # width=800,
                 showlegend=True,
             )
-            # overview_fig.add_annotation(
-            #     x=self.results[0].process_time.magnitude[1000],
-            #     y=self.results[0].reflectance_wavelengths[i].raw_intensity[1000],
-            #     xref="x",
-            #     yref="y",
-            #     text="Annotation Text",
-            #     showarrow=True,
-            #     arrowhead=7,
-            #     ax=0,
-            #     ay=-40,
-            # )
-            overview_fig_json = overview_fig.to_plotly_json()
-            for subplot in overview_fig_json["data"]:
-                subplot["config"] = {"displayModeBar": True, "scrollZoom": True}
-            # overview_fig_json["config"] = {"displayModeBar": True, "scrollZoom": True}
+            # overview_fig_json = overview_fig.to_plotly_json()
+            overview_fig_json = overview_fig_test.to_plotly_json()
+            # for subplot in overview_fig_json["data"]:
+            #     subplot["config"] = {
+            #         "displayModeBar": False,
+            #         "scrollZoom": False,
+            #         "responsive": False,
+            #         "displaylogo": False,
+            #     }
+            overview_fig_json["config"] = {
+                "displayModeBar": False,
+                "scrollZoom": False,
+                "responsive": False,
+                "displaylogo": False,
+            }
             self.figures = [PlotlyFigure(label="figure 1", figure=overview_fig_json)]
 
 
