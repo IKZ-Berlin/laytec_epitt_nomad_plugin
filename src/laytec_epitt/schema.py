@@ -225,9 +225,9 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 self.samples[0].normalize(archive, logger)
             else:
                 logger.warning(
-                    "No grown_sample found in GrowthMovpe2.grown_sample.\
-                     No sample is referenced in LayTecEpiTTMeasurement. \
-                     Please upload a growth process file and reprocess."
+                    "No grown_sample found in GrowthMovpe2.grown_sample. "
+                    + "No sample is referenced in LayTecEpiTTMeasurement. "
+                    + "Please upload a growth process file and reprocess."
                 )
 
         # noise smoothening with autocorrelated function
@@ -266,6 +266,10 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
             )
             overview_fig.add_trace(temperature_object, row=2, col=1)
             for trace in self.results[0].reflectance_wavelengths:
+                trace_min = trace.autocorrelation_starting_point
+                trace_max = (
+                    trace.autocorrelation_starting_point + trace.autocorrelation_period
+                )
                 single_trace_fig = make_subplots(
                     rows=2,
                     cols=1,
@@ -287,8 +291,8 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     # ),
                     name=f"{trace.wavelength.magnitude} nm",
                 )
-                x_slice = self.results[0].process_time[0:2000]
-                y_slice = trace.raw_intensity[0:2000]
+                x_slice = self.results[0].process_time[trace_min:trace_max]
+                y_slice = trace.raw_intensity[trace_min:trace_max]
                 go_object_slice = go.Scattergl(
                     x=x_slice,
                     y=y_slice,
@@ -317,9 +321,11 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     trace.autocorrelated_intensity is not None
                     and trace.autocorrelated_intensity.any()
                 ):
+                    x_slice = self.results[0].process_time[trace_min:trace_max]
+                    y_slice = trace.autocorrelated_intensity[1:]
                     go_object = go.Scattergl(
-                        x=self.results[0].process_time,
-                        y=trace.autocorrelated_intensity,
+                        x=x_slice,
+                        y=y_slice,
                         mode="lines+markers",
                         line={"width": 2},
                         marker={"size": 2},
@@ -336,13 +342,40 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     width=600,
                     showlegend=False,
                     dragmode="pan",
+                    shapes=[
+                        dict(
+                            type="line",
+                            xref="x1",
+                            yref="y1",
+                            x0=1,
+                            y0=1,
+                            x1=2,
+                            y1=2,
+                            line=dict(
+                                color="RoyalBlue",
+                                width=1,
+                            ),
+                        ),
+                        dict(
+                            type="line",
+                            xref="x2",
+                            yref="y2",
+                            x0=1,
+                            y0=1,
+                            x1=2,
+                            y1=2,
+                            line=dict(
+                                color="RoyalBlue",
+                                width=1,
+                            ),
+                        ),
+                    ],
                     # xaxis={"range": [start, start + period], "fixedrange": True},
                     # xaxis2={"range": [start, start + period], "fixedrange": True},
                     # yaxis={"fixedrange": False},
                     # yaxis2={"fixedrange": False},
                 )
                 single_trace_fig.update_xaxes(
-                    range=(0, 2000),  # [start, start + period],
                     fixedrange=True,
                     constrain="domain",
                     matches="x",
@@ -351,26 +384,26 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     col=1,
                 )
                 single_trace_fig.update_xaxes(
-                    range=(0, 2000),  # [start, start + period],
                     fixedrange=True,
                     constrain="domain",
                     matches="x",
                     ticks="outside",
                     ticklen=5,
-                    showticklabels=True,
+                    showticklabels=False,
                     title_text="Time [s]",
                     row=2,
                     col=1,
                 )
                 single_trace_fig.update_yaxes(
                     title_text="Intensity [a. u.]",
+                    showticklabels=False,
                     row=1,
                     col=1,
                 )
                 single_trace_fig.update_yaxes(
                     fixedrange=False,
-                    ticks="outside",
-                    ticklen=5,
+                    showticklabels=False,
+                    ticks="",
                     title_text="Autocorrelated Int. [a. u.]",
                     row=2,
                     col=1,
@@ -392,11 +425,49 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
             overview_fig.update_layout(
                 height=1800,
                 # width=800,
+                shapes=[
+                    dict(
+                        type="line",
+                        xref="x1",
+                        yref="y1",
+                        x0=1,
+                        y0=1,
+                        x1=2,
+                        y1=2,
+                        line=dict(
+                            color="RoyalBlue",
+                            width=1,
+                        ),
+                        row=1,
+                        col=1,
+                    ),
+                    dict(
+                        type="line",
+                        xref="x2",
+                        yref="y2",
+                        x0=1,
+                        y0=1,
+                        x1=2,
+                        y1=2,
+                        line=dict(
+                            color="RoyalBlue",
+                            width=1,
+                        ),
+                        row=2,
+                        col=1,
+                    ),
+                ],
                 showlegend=True,
             )
-            overview_fig.update_yaxes(title_text="Intensity [a.u.]", row=1, col=1)
-            overview_fig.update_xaxes(title_text="Time [s]", row=2, col=1)
-            overview_fig.update_yaxes(title_text="T [°C]", row=2, col=1)
+            overview_fig.update_yaxes(
+                title_text="Intensity [a.u.]", showticklabels=False, row=1, col=1
+            )
+            overview_fig.update_xaxes(
+                title_text="Time [s]", showticklabels=False, row=2, col=1
+            )
+            overview_fig.update_yaxes(
+                title_text="T [°C]", showticklabels=False, row=2, col=1
+            )
             overview_fig_json = overview_fig.to_plotly_json()
             overview_fig_json["config"] = {
                 "scrollZoom": False,
