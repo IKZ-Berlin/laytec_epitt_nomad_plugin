@@ -251,8 +251,8 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 rows=2,
                 cols=1,
                 shared_xaxes=True,
-                vertical_spacing=0.07,
-                subplot_titles=["Reflectance", "Temperature"],
+                vertical_spacing=0.03,
+                subplot_titles=["Reflectance"],
             )
 
             temperature_object = go.Scattergl(
@@ -273,8 +273,8 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 single_trace_fig = make_subplots(
                     rows=2,
                     cols=1,
-                    # shared_xaxes=True,
-                    vertical_spacing=0.025,
+                    shared_xaxes=True,
+                    vertical_spacing=0.03,
                     subplot_titles=["Reflectance"],
                 )
                 go_object = go.Scattergl(
@@ -293,22 +293,8 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 )
                 x_slice = self.results[0].process_time[trace_min:trace_max]
                 y_slice = trace.raw_intensity[trace_min:trace_max]
-                go_object_slice = go.Scattergl(
-                    x=x_slice,
-                    y=y_slice,
-                    mode="lines+markers",
-                    line={"width": 2},
-                    marker={"size": 2},
-                    # marker=dict(
-                    #     color=np.log10(self.results[0].intensity),
-                    #     colorscale="inferno",
-                    #     line_width=0,
-                    #     showscale=True,
-                    # ),
-                    name=f"{trace.wavelength.magnitude} nm",
-                )
                 single_trace_fig.add_trace(
-                    go_object_slice,  # go_object,
+                    go_object,  # go_object,
                     row=1,
                     col=1,
                 )
@@ -336,75 +322,61 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                         row=2,
                         col=1,
                     )
-
                 single_trace_fig.update_layout(
-                    height=1200,
-                    width=600,
+                    # height=1200,
+                    # width=600,
                     showlegend=False,
                     dragmode="pan",
-                    shapes=[
-                        dict(
-                            type="line",
-                            xref="x1",
-                            yref="y1",
-                            x0=1,
-                            y0=1,
-                            x1=2,
-                            y1=2,
-                            line=dict(
-                                color="RoyalBlue",
-                                width=1,
-                            ),
-                        ),
-                        dict(
-                            type="line",
-                            xref="x2",
-                            yref="y2",
-                            x0=1,
-                            y0=1,
-                            x1=2,
-                            y1=2,
-                            line=dict(
-                                color="RoyalBlue",
-                                width=1,
-                            ),
-                        ),
-                    ],
-                    # xaxis={"range": [start, start + period], "fixedrange": True},
-                    # xaxis2={"range": [start, start + period], "fixedrange": True},
-                    # yaxis={"fixedrange": False},
-                    # yaxis2={"fixedrange": False},
                 )
                 single_trace_fig.update_xaxes(
-                    fixedrange=True,
-                    constrain="domain",
-                    matches="x",
+                    title_text="",
+                    autorange=False,
+                    range=[trace_min, trace_max],
+                    fixedrange=False,
+                    ticks="",  # "outside",
                     showticklabels=False,
+                    showline=True,
+                    linewidth=1,
+                    linecolor="black",
+                    mirror=True,
                     row=1,
                     col=1,
                 )
                 single_trace_fig.update_xaxes(
-                    fixedrange=True,
-                    constrain="domain",
-                    matches="x",
-                    ticks="outside",
-                    ticklen=5,
-                    showticklabels=False,
                     title_text="Time [s]",
+                    autorange=False,
+                    range=[trace_min, trace_max],
+                    fixedrange=False,
+                    ticks="",  # "outside",
+                    showticklabels=True,
+                    showline=True,
+                    linewidth=1,
+                    linecolor="black",
+                    mirror=True,
                     row=2,
                     col=1,
                 )
                 single_trace_fig.update_yaxes(
                     title_text="Intensity [a. u.]",
-                    showticklabels=False,
+                    fixedrange=False,
+                    ticks="",  # "outside",
+                    showticklabels=True,
+                    showline=True,
+                    linewidth=1,
+                    linecolor="black",
+                    mirror=True,
                     row=1,
                     col=1,
                 )
                 single_trace_fig.update_yaxes(
-                    fixedrange=False,
-                    showticklabels=False,
-                    ticks="",
                     title_text="Autocorrelated Int. [a. u.]",
+                    fixedrange=False,
+                    ticks="",  # "outside",
+                    showticklabels=True,
+                    showline=True,
+                    linewidth=1,
+                    linecolor="black",
+                    mirror=True,
                     row=2,
                     col=1,
                 )
@@ -423,51 +395,76 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     )
                 ]
             overview_fig.update_layout(
-                height=1800,
+                # height=1800,
                 # width=800,
-                shapes=[
-                    dict(
-                        type="line",
-                        xref="x1",
-                        yref="y1",
-                        x0=1,
-                        y0=1,
-                        x1=2,
-                        y1=2,
-                        line=dict(
-                            color="RoyalBlue",
-                            width=1,
-                        ),
-                        row=1,
-                        col=1,
-                    ),
-                    dict(
-                        type="line",
-                        xref="x2",
-                        yref="y2",
-                        x0=1,
-                        y0=1,
-                        x1=2,
-                        y1=2,
-                        line=dict(
-                            color="RoyalBlue",
-                            width=1,
-                        ),
-                        row=2,
-                        col=1,
-                    ),
-                ],
                 showlegend=True,
+                legend=dict(
+                    orientation="h",  # "h",
+                    bgcolor="rgba(0,0,0,0)",
+                    # yanchor="bottom",
+                    # y=1.02,
+                    # xanchor="center",
+                    # x=1,
+                    yanchor="bottom",
+                    y=0.51,
+                    xanchor="left",
+                    x=0.01,
+                    itemwidth=30,
+                ),
             )
             overview_fig.update_yaxes(
-                title_text="Intensity [a.u.]", showticklabels=False, row=1, col=1
+                title_text="Intensity [a.u.]",
+                fixedrange=True,
+                ticks="",  # "outside",
+                showticklabels=True,
+                showline=True,
+                linewidth=1,
+                linecolor="black",
+                mirror=True,
+                row=1,
+                col=1,
+            )
+            overview_fig.update_yaxes(
+                title_text="Temperature [°C]",
+                fixedrange=True,
+                ticks="",  # "outside",
+                showticklabels=True,
+                showline=True,
+                linewidth=1,
+                linecolor="black",
+                mirror=True,
+                row=2,
+                col=1,
             )
             overview_fig.update_xaxes(
-                title_text="Time [s]", showticklabels=False, row=2, col=1
+                title_text="",
+                # autorange=False,
+                # range=[trace_min, trace_max],
+                fixedrange=True,
+                ticks="",  # "outside",
+                showticklabels=False,
+                showline=True,
+                linewidth=1,
+                linecolor="black",
+                mirror=True,
+                row=1,
+                col=1,
             )
-            overview_fig.update_yaxes(
-                title_text="T [°C]", showticklabels=False, row=2, col=1
+            overview_fig.update_xaxes(
+                title_text="Time [s]",
+                # autorange=False,
+                # range=[trace_min, trace_max],
+                fixedrange=True,
+                ticks="",  # "outside",
+                showticklabels=True,
+                showline=True,
+                linewidth=1,
+                linecolor="black",
+                mirror=True,
+                row=2,
+                col=1,
             )
+            # overview_fig.update_yaxes(range=[0, 175], autorange=False)
             overview_fig_json = overview_fig.to_plotly_json()
             overview_fig_json["config"] = {
                 "scrollZoom": False,
