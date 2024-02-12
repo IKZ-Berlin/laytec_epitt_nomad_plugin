@@ -108,6 +108,12 @@ class LayTecEpiTTMeasurementResult(MeasurementResult):
     Add description
     """
 
+    m_def = Section(
+        a_eln=ELNAnnotation(
+            lane_width='300px',
+        ),
+    )
+
     process_time = Quantity(
         type=np.dtype(np.float64),
         unit="seconds",
@@ -323,8 +329,8 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                         col=1,
                     )
                 single_trace_fig.update_layout(
-                    # height=1200,
-                    # width=600,
+                    height=800,
+                    #width=1000,
                     showlegend=False,
                     dragmode="pan",
                 )
@@ -395,7 +401,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     )
                 ]
             overview_fig.update_layout(
-                # height=1800,
+                height=800,
                 # width=800,
                 showlegend=True,
                 legend=dict(
