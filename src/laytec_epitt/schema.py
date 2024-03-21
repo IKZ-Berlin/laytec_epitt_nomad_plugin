@@ -22,6 +22,7 @@ from plotly.subplots import make_subplots
 import plotly.graph_objs as go
 
 from statsmodels import api as sm
+from scipy.signal import find_peaks
 
 from nomad.metainfo import (
     Quantity,
@@ -54,6 +55,52 @@ m_package = Package(name="LayTec EpiTT Schema")
 
 class IKZLayTecEpiTTCategory(EntryDataCategory):
     m_def = Category(label="LayTec EpiTT", categories=[EntryDataCategory])
+
+
+class RefractiveIndex(ArchiveSection):
+    reference = Quantity(
+        type=ArchiveSection,
+        description="A reference to a Ellipsometry measurement to obtain refractive index.",
+        a_eln=ELNAnnotation(
+            component="ReferenceEditQuantity",
+        ),
+    )
+    value = Quantity(
+        type=np.dtype(np.float64),
+        unit="meter/second",
+        a_eln=ELNAnnotation(
+            component="NumberEditQuantity",
+            defaultDisplayUnit="nm/second",
+        ),
+    )
+
+
+class GrowthRate(ArchiveSection):
+    """
+    Add description
+    """
+
+    growth_period = Quantity(
+        type=np.dtype(np.float64),
+        unit="second",
+        description="""
+        peak-to-peak (or valley-to-valley)
+        distance of the reflectance oscillation at the selected wavelength
+        in the reflectance vs. time plot.
+        """,
+        a_eln=ELNAnnotation(
+            component="NumberEditQuantity",
+            defaultDisplayUnit="second",
+        ),
+    )
+    growth_rate = Quantity(
+        type=np.dtype(np.float64),
+        unit="meter/second",
+        a_eln=ELNAnnotation(
+            component="NumberEditQuantity",
+            defaultDisplayUnit="nm/second",
+        ),
+    )
 
 
 class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
@@ -101,6 +148,7 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
         """,
         shape=["*"],
     )
+    growth_rate = SubSection(section_def=GrowthRate)
 
 
 class LayTecEpiTTMeasurementResult(MeasurementResult):
@@ -110,7 +158,7 @@ class LayTecEpiTTMeasurementResult(MeasurementResult):
 
     m_def = Section(
         a_eln=ELNAnnotation(
-            lane_width='300px',
+            lane_width="300px",
         ),
     )
 
@@ -125,6 +173,7 @@ class LayTecEpiTTMeasurementResult(MeasurementResult):
         unit="celsius",
         shape=["*"],
     )
+    refractive_index = SubSection(section_def=RefractiveIndex)
     reflectance_wavelengths = SubSection(
         section_def=ReflectanceWavelengthTransient, repeats=True
     )
@@ -236,20 +285,44 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     + "Please upload a growth process file and reprocess."
                 )
 
-        # noise smoothening with autocorrelated function
-        for trace in self.results[0].reflectance_wavelengths:
-            if not getattr(trace, "autocorrelation_starting_point"):
-                setattr(trace, "autocorrelation_starting_point", 0)
-            if not getattr(trace, "autocorrelation_period"):
-                setattr(trace, "autocorrelation_period", len(trace.raw_intensity))
-            start = trace.autocorrelation_starting_point
-            period = trace.autocorrelation_period
-            if period is not None and start is not None:
-                trace.autocorrelated_intensity = sm.tsa.acf(
-                    trace.raw_intensity[start : (start + period)],
-                    nlags=period,
-                    fft=False,
-                )
+        if self.results[0]:
+            # noise smoothening with autocorrelated function
+            for trace in self.results[0].reflectance_wavelengths:
+                if not getattr(trace, "autocorrelation_starting_point"):
+                    setattr(trace, "autocorrelation_starting_point", 0)
+                if not getattr(trace, "autocorrelation_period"):
+                    setattr(trace, "autocorrelation_period", len(trace.raw_intensity))
+                start = trace.autocorrelation_starting_point
+                period = trace.autocorrelation_period
+                if period is not None and start is not None:
+                    trace.autocorrelated_intensity = sm.tsa.acf(
+                        trace.raw_intensity[start : (start + period)],
+                        nlags=period,
+                        fft=False,
+                    )
+
+            # growth rate calculation
+            refractive_index = getattr(
+                getattr(self.results[0], "refractive_index", None), "value", None
+            )
+            print(f"ziocccan: {refractive_index}")
+            if refractive_index is not None:
+                for trace in self.results[0].reflectance_wavelengths:
+                    # find peaks
+                    peaks, peak_properties = find_peaks(trace.raw_intensity)
+                    # find valleys
+                    valleys, valley_properties = find_peaks(-trace.raw_intensity)
+                    # find the peak-to-peak distance
+                    peak_to_peak = np.diff(peaks)
+                    valley_to_valley = np.diff(valleys)
+                    # calculate the growth rate
+                    trace.growth_rate = GrowthRate()
+                    trace.growth_rate.growth_period = np.mean(
+                        [peak_to_peak, valley_to_valley]
+                    )
+                    trace.growth_rate.growth_rate = trace.wavelength.magnitude / (
+                        refractive_index * trace.growth_period
+                    )
 
         # plots
         if self.results[0]:
@@ -330,7 +403,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     )
                 single_trace_fig.update_layout(
                     height=800,
-                    #width=1000,
+                    # width=1000,
                     showlegend=False,
                     dragmode="pan",
                 )
