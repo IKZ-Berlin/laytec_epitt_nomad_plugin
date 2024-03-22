@@ -22,6 +22,8 @@ import yaml
 import pandas as pd
 from datetime import datetime
 
+from nomad.units import ureg
+
 from nomad.utils import hash
 from nomad.datamodel import EntryArchive
 from nomad.metainfo import Quantity, Section
@@ -41,6 +43,7 @@ from laytec_epitt.schema import (
     ReflectanceWavelengthTransient,
     LayTecEpiTTMeasurementResult,
     MeasurementSettings,
+    RefractiveIndex,
 )
 
 
@@ -182,12 +185,39 @@ class EpiTTParser(MatchingParser):
                     if wl in epitt_data[0].keys():
                         spectrum = epitt_data[1][datacolname]
                         transient_object = ReflectanceWavelengthTransient()
-                        transient_object.wavelength = int(
-                            round(float(epitt_data[0][wl]))
-                        )  # * ureg("nanometer") #float(epitt_data[0][wl])* ureg('nanometer')
-                        transient_object.wavelength_name = wl
+                        transient_object.wavelength = (
+                            float(epitt_data[0][wl])
+                            * ureg("nanometer").to("meter").magnitude
+                        )
+                        transient_object.name = str(
+                            int(
+                                round(
+                                    transient_object.wavelength.to(
+                                        "nanometer"
+                                    ).magnitude
+                                )
+                            )
+                        )
+                        transient_object.rawfile_column_header = wl
                         transient_object.raw_intensity = spectrum / spectrum[0]
-                        # smoothed_intesity is processed in the normalizer
+
+                        # MANUAL refractive index assignment (until we have ELLIPSOMETRY data in the archive)
+                        refractive_index = 1.0
+                        if transient_object.name == "633":
+                            # ELLIPSOMETRY measurement at 800 degree celsius
+                            refractive_index = 1.95
+                        elif transient_object.name == "405":
+                            # ELLIPSOMETRY measurement at 800 degree celsius
+                            refractive_index = 2.02
+                        elif transient_object.name == "951":
+                            # ELLIPSOMETRY measurement at 800 degree celsius
+                            refractive_index = 1.93
+                        if not getattr(transient_object, "refractive_index"):
+                            transient_object.refractive_index = RefractiveIndex(
+                                value=refractive_index
+                            )
+
+                        # smoothed_intesity is calculated in the LayTecEpiTTMeasurement normalizer
                         results.reflectance_wavelengths.append(transient_object)
                 measurement_data.results = [results]
             filetype = "yaml"

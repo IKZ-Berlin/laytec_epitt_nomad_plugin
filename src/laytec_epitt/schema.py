@@ -67,10 +67,8 @@ class RefractiveIndex(ArchiveSection):
     )
     value = Quantity(
         type=np.dtype(np.float64),
-        unit="meter/second",
         a_eln=ELNAnnotation(
             component="NumberEditQuantity",
-            defaultDisplayUnit="nm/second",
         ),
     )
 
@@ -80,6 +78,20 @@ class GrowthRate(ArchiveSection):
     Add description
     """
 
+    from_raw_reflectance = Quantity(
+        type=bool,
+        description="The growth rate is calculated from the smoothened reflectance trace.",
+        a_eln=ELNAnnotation(
+            component="BoolEditQuantity",
+        ),
+    )
+    from_smoothened_reflectance = Quantity(
+        type=bool,
+        description="The growth rate is calculated from the raw reflectance trace.",
+        a_eln=ELNAnnotation(
+            component="BoolEditQuantity",
+        ),
+    )
     growth_period = Quantity(
         type=np.dtype(np.float64),
         unit="second",
@@ -106,14 +118,25 @@ class GrowthRate(ArchiveSection):
 class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
     m_def = Section(
         a_eln=dict(lane_width="600px"),
-        label_quantity="wavelength",
+        label_quantity="name",
+    )
+    name = Quantity(
+        type=str,
+        description="Name of the reflectance trace",
+        a_eln=ELNAnnotation(
+            component="StringEditQuantity",
+        ),
     )
     wavelength = Quantity(
         type=np.dtype(np.float64),
-        unit="nanometer",
+        unit="meter",
         description="Reflectance Wavelength",
+        a_eln=dict(
+            component="NumberEditQuantity",
+            defaultDisplayUnit="nanometer",
+        ),
     )
-    wavelength_name = Quantity(
+    rawfile_column_header = Quantity(
         type=str,
         description="Name of Reflectance ",
     )
@@ -140,6 +163,36 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
         """,
         a_eln={"component": "NumberEditQuantity"},
     )
+    peaks_distance = Quantity(
+        type=np.dtype(np.float64),
+        description="""
+        Peak-to-peak distance of the reflectance oscillation,
+        it is used for automatic peak recognition to calculate the growth rate.
+        It will be injected as the distance parameter in the scipy.signal.find_peaks method.
+        """,
+    )
+    peaks_positions = Quantity(
+        type=np.dtype(np.float64),
+        description="Positions of the peaks in the reflectance trace.",
+        shape=["*"],
+        unit="seconds",
+    )
+    peaks = Quantity(
+        type=np.dtype(np.float64),
+        description="Peak-to-peak distance of the reflectance oscillation.",
+        shape=["*"],
+    )
+    valleys_positions = Quantity(
+        type=np.dtype(np.float64),
+        description="Positions of the valleys in the reflectance trace.",
+        shape=["*"],
+        unit="seconds",
+    )
+    valleys = Quantity(
+        type=np.dtype(np.float64),
+        description="Valley-to-valley distance of the reflectance oscillation.",
+        shape=["*"],
+    )
     autocorrelated_intensity = Quantity(
         type=np.dtype(np.float64),
         description="""
@@ -147,7 +200,9 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
         with a autocorrelation algorythm implemented in the statsmodels package.
         """,
         shape=["*"],
+        unit="seconds",
     )
+    refractive_index = SubSection(section_def=RefractiveIndex)
     growth_rate = SubSection(section_def=GrowthRate)
 
 
@@ -173,7 +228,6 @@ class LayTecEpiTTMeasurementResult(MeasurementResult):
         unit="celsius",
         shape=["*"],
     )
-    refractive_index = SubSection(section_def=RefractiveIndex)
     reflectance_wavelengths = SubSection(
         section_def=ReflectanceWavelengthTransient, repeats=True
     )
@@ -301,27 +355,37 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                         fft=False,
                     )
 
-            # growth rate calculation
-            refractive_index = getattr(
-                getattr(self.results[0], "refractive_index", None), "value", None
-            )
-            print(f"ziocccan: {refractive_index}")
-            if refractive_index is not None:
-                for trace in self.results[0].reflectance_wavelengths:
+                # growth rate calculation
+                refractive_index = getattr(
+                    getattr(trace, "refractive_index", None), "value", None
+                )
+                if not getattr(trace, "peaks_distance"):
+                    setattr(trace, "peaks_distance", 500)
+                if refractive_index is not None:
                     # find peaks
-                    peaks, peak_properties = find_peaks(trace.raw_intensity)
+                    peaks_indices, _ = find_peaks(
+                        trace.raw_intensity, distance=trace.peaks_distance
+                    )
                     # find valleys
-                    valleys, valley_properties = find_peaks(-trace.raw_intensity)
+                    valleys_indices, _ = find_peaks(
+                        -trace.raw_intensity, distance=trace.peaks_distance
+                    )
+                    trace.peaks_positions = self.results[0].process_time[peaks_indices]
+                    trace.valleys_positions = self.results[0].process_time[
+                        valleys_indices
+                    ]
+                    trace.peaks = trace.raw_intensity[peaks_indices]
+                    trace.valleys = trace.raw_intensity[valleys_indices]
                     # find the peak-to-peak distance
-                    peak_to_peak = np.diff(peaks)
-                    valley_to_valley = np.diff(valleys)
+                    peak_to_peak = np.diff(trace.peaks)
+                    valley_to_valley = np.diff(trace.valleys)
                     # calculate the growth rate
                     trace.growth_rate = GrowthRate()
                     trace.growth_rate.growth_period = np.mean(
-                        [peak_to_peak, valley_to_valley]
+                        np.concatenate((peak_to_peak, valley_to_valley))
                     )
-                    trace.growth_rate.growth_rate = trace.wavelength.magnitude / (
-                        refractive_index * trace.growth_period
+                    trace.growth_rate.growth_rate = trace.wavelength / (
+                        refractive_index * trace.growth_rate.growth_period
                     )
 
         # plots
@@ -370,10 +434,26 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     # ),
                     name=f"{trace.wavelength.magnitude} nm",
                 )
+                positions = np.concatenate(
+                    (trace.peaks_positions, trace.valleys_positions)
+                )
+                peak_intensities = np.concatenate((trace.peaks, trace.valleys))
+                go_object_peaks = go.Scattergl(
+                    x=positions,
+                    y=peak_intensities,
+                    mode="markers",
+                    marker={"size": 15},
+                    name="peaks",
+                )
                 x_slice = self.results[0].process_time[trace_min:trace_max]
                 y_slice = trace.raw_intensity[trace_min:trace_max]
                 single_trace_fig.add_trace(
-                    go_object,  # go_object,
+                    go_object,
+                    row=1,
+                    col=1,
+                )
+                single_trace_fig.add_trace(
+                    go_object_peaks,
                     row=1,
                     col=1,
                 )
