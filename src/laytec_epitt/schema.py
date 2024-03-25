@@ -695,6 +695,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     col=1,
                 )
                 single_trace_fig.update_layout(
+                    template="plotly_white",
                     height=800,
                     # width=1000,
                     showlegend=False,
@@ -793,6 +794,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     )
                 ]
             overview_fig.update_layout(
+                template="plotly_white",
                 height=800,
                 # width=800,
                 showlegend=True,
