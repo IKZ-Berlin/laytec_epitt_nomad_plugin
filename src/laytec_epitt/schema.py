@@ -27,6 +27,7 @@ from scipy.signal import find_peaks
 from nomad.metainfo import (
     Quantity,
     Package,
+    MEnum,
     SubSection,
     Section,
 )
@@ -73,36 +74,127 @@ class RefractiveIndex(ArchiveSection):
     )
 
 
+class FindPeaksParameters(ArchiveSection):
+    """
+    Parameters for the find_peaks function from scipy.signal
+    """
+
+    minimum_peaks_distance = Quantity(
+        type=np.dtype(np.float64),
+        description="""
+        Peak-to-peak distance of the reflectance oscillation,
+        it is used for automatic peak recognition to calculate the growth rate.
+        It will be injected as the distance parameter in the scipy.signal.find_peaks method.
+        """,
+        a_eln=ELNAnnotation(
+            component="NumberEditQuantity",
+        ),
+    )
+    first_peak_index = Quantity(
+        type=int,
+        description="""
+        the index of the first maximum in the maxima vector to be considered for growth rate calculation.
+        """,
+        a_eln=ELNAnnotation(
+            component="NumberEditQuantity",
+        ),
+    )
+    last_peak_index = Quantity(
+        type=int,
+        description="""
+        the index of the last maximum in the maxima vector to be considered for growth rate calculation.
+        """,
+        a_eln=ELNAnnotation(
+            component="NumberEditQuantity",
+        ),
+    )
+    peaks_abscissa = Quantity(
+        type=np.dtype(np.float64),
+        description="Positions of the peaks in the reflectance trace.",
+        shape=["*"],
+        unit="seconds",
+        a_eln=dict(
+            component="NumberEditQuantity",
+            defaultDisplayUnit="second",
+        ),
+    )
+    peaks_ordinate = Quantity(
+        type=np.dtype(np.float64),
+        description="Peak-to-peak distance of the reflectance oscillation.",
+        shape=["*"],
+    )
+    first_valley_index = Quantity(
+        type=int,
+        description="""
+        the index of the first minimum in the minima vector to be considered for growth rate calculation.
+        """,
+        a_eln=ELNAnnotation(
+            component="NumberEditQuantity",
+        ),
+    )
+    last_valley_index = Quantity(
+        type=int,
+        description="""
+        the index of the last minimum in the minima vector to be considered for growth rate calculation.
+        """,
+        a_eln=ELNAnnotation(
+            component="NumberEditQuantity",
+        ),
+    )
+    valleys_abscissa = Quantity(
+        type=np.dtype(np.float64),
+        description="Positions of the valleys in the reflectance trace.",
+        shape=["*"],
+        unit="seconds",
+        a_eln=dict(
+            component="NumberEditQuantity",
+            defaultDisplayUnit="second",
+        ),
+    )
+    valleys_ordinate = Quantity(
+        type=np.dtype(np.float64),
+        description="Valley-to-valley distance of the reflectance oscillation.",
+        shape=["*"],
+    )
+
+
 class GrowthRate(ArchiveSection):
     """
     Add description
     """
 
-    from_raw_reflectance = Quantity(
-        type=bool,
-        description="The growth rate is calculated from the smoothened reflectance trace.",
-        a_eln=ELNAnnotation(
-            component="BoolEditQuantity",
+    reflectance_trace = Quantity(
+        type=MEnum(
+            "Raw",
+            "Smoothed",
+            "Autocorrelated",
         ),
-    )
-    from_smoothened_reflectance = Quantity(
-        type=bool,
-        description="The growth rate is calculated from the raw reflectance trace.",
         a_eln=ELNAnnotation(
-            component="BoolEditQuantity",
+            component="RadioEnumEditQuantity",
         ),
+        description="Select the reflectance trace to calculate the growth rate.",
     )
     growth_period = Quantity(
         type=np.dtype(np.float64),
         unit="second",
         description="""
-        peak-to-peak (or valley-to-valley)
+        averaged peak-to-peak (and valley-to-valley)
         distance of the reflectance oscillation at the selected wavelength
         in the reflectance vs. time plot.
         """,
         a_eln=ELNAnnotation(
             component="NumberEditQuantity",
             defaultDisplayUnit="second",
+        ),
+    )
+    recalculate_on_save = Quantity(
+        type=MEnum(
+            "Yes",
+            "No",
+        ),
+        description="When saving the section, recalculate the growth rate",
+        a_eln=ELNAnnotation(
+            component="RadioEnumEditQuantity",
         ),
     )
     growth_rate = Quantity(
@@ -113,11 +205,11 @@ class GrowthRate(ArchiveSection):
             defaultDisplayUnit="nm/second",
         ),
     )
+    peaks_identification = SubSection(section_def=FindPeaksParameters)
 
 
 class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
     m_def = Section(
-        a_eln=dict(lane_width="600px"),
         label_quantity="name",
     )
     name = Quantity(
@@ -140,11 +232,6 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
         type=str,
         description="Name of Reflectance ",
     )
-    raw_intensity = Quantity(
-        type=np.dtype(np.float64),
-        shape=["*"],
-        description="Normalized reflectance wavelength",
-    )
     autocorrelation_starting_point = Quantity(
         type=np.int64,
         description="""
@@ -163,40 +250,25 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
         """,
         a_eln={"component": "NumberEditQuantity"},
     )
-    peaks_distance = Quantity(
+    raw_intensity = Quantity(
         type=np.dtype(np.float64),
-        description="""
-        Peak-to-peak distance of the reflectance oscillation,
-        it is used for automatic peak recognition to calculate the growth rate.
-        It will be injected as the distance parameter in the scipy.signal.find_peaks method.
-        """,
-    )
-    peaks_positions = Quantity(
-        type=np.dtype(np.float64),
-        description="Positions of the peaks in the reflectance trace.",
         shape=["*"],
-        unit="seconds",
+        description="Normalized reflectance wavelength",
     )
-    peaks = Quantity(
+    smoothed_intensity = Quantity(
         type=np.dtype(np.float64),
-        description="Peak-to-peak distance of the reflectance oscillation.",
         shape=["*"],
-    )
-    valleys_positions = Quantity(
-        type=np.dtype(np.float64),
-        description="Positions of the valleys in the reflectance trace.",
-        shape=["*"],
-        unit="seconds",
-    )
-    valleys = Quantity(
-        type=np.dtype(np.float64),
-        description="Valley-to-valley distance of the reflectance oscillation.",
-        shape=["*"],
+        description="Normalized and smoothed reflectance wavelength. The smoothing is done with a moving average filter from Pandas package [.rolling(30).mean()].",
+        a_plotly_express={
+            "method": "line",
+            "x": "#/data/results/0/process_time",
+            "y": "#smoothed_intensity",
+        },
     )
     autocorrelated_intensity = Quantity(
         type=np.dtype(np.float64),
         description="""
-        Normalized reflectance wavelength smoothed
+        Normalized reflectance wavelength processed
         with a autocorrelation algorythm implemented in the statsmodels package.
         """,
         shape=["*"],
@@ -219,7 +291,7 @@ class LayTecEpiTTMeasurementResult(MeasurementResult):
 
     process_time = Quantity(
         type=np.dtype(np.float64),
-        unit="seconds",
+        unit="second",
         shape=["*"],
     )
     pyrometer_temperature = Quantity(
@@ -340,6 +412,21 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 )
 
         if self.results[0]:
+            # noise smoothening with moving average
+            for trace in self.results[0].reflectance_wavelengths:
+                if not getattr(trace, "autocorrelation_starting_point"):
+                    setattr(trace, "autocorrelation_starting_point", 0)
+                if not getattr(trace, "autocorrelation_period"):
+                    setattr(trace, "autocorrelation_period", len(trace.raw_intensity))
+                start = trace.autocorrelation_starting_point
+                period = trace.autocorrelation_period
+                if period is not None and start is not None:
+                    trace.smoothed_intensity = (
+                        pd.Series(trace.raw_intensity[start : (start + period)])
+                        .rolling(30)
+                        .mean()
+                    )
+
             # noise smoothening with autocorrelated function
             for trace in self.results[0].reflectance_wavelengths:
                 if not getattr(trace, "autocorrelation_starting_point"):
@@ -359,31 +446,124 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 refractive_index = getattr(
                     getattr(trace, "refractive_index", None), "value", None
                 )
-                if not getattr(trace, "peaks_distance"):
-                    setattr(trace, "peaks_distance", 500)
-                if refractive_index is not None:
-                    # find peaks
-                    peaks_indices, _ = find_peaks(
-                        trace.raw_intensity, distance=trace.peaks_distance
+                if not getattr(trace, "growth_rate"):
+                    setattr(trace, "growth_rate", GrowthRate())
+                if not getattr(trace.growth_rate, "peaks_identification"):
+                    setattr(
+                        trace.growth_rate, "peaks_identification", FindPeaksParameters()
                     )
-                    # find valleys
-                    valleys_indices, _ = find_peaks(
-                        -trace.raw_intensity, distance=trace.peaks_distance
+                if not getattr(
+                    trace.growth_rate.peaks_identification,
+                    "minimum_peaks_distance",
+                    None,
+                ):
+                    if trace.name in ["951", "950"]:
+                        setattr(
+                            trace.growth_rate.peaks_identification,
+                            "minimum_peaks_distance",
+                            500,
+                        )
+                    if trace.name in ["633"]:
+                        setattr(
+                            trace.growth_rate.peaks_identification,
+                            "minimum_peaks_distance",
+                            300,
+                        )
+                    if trace.name in ["405"]:
+                        setattr(
+                            trace.growth_rate.peaks_identification,
+                            "minimum_peaks_distance",
+                            200,
+                        )
+                # fill some default values
+                if not getattr(
+                    trace.growth_rate.peaks_identification, "first_peak_index"
+                ):
+                    setattr(
+                        trace.growth_rate.peaks_identification, "first_peak_index", 0
                     )
-                    trace.peaks_positions = self.results[0].process_time[peaks_indices]
-                    trace.valleys_positions = self.results[0].process_time[
-                        valleys_indices
+                if not getattr(
+                    trace.growth_rate.peaks_identification, "last_peak_index"
+                ):
+                    setattr(
+                        trace.growth_rate.peaks_identification, "last_peak_index", 4
+                    )
+                if not getattr(
+                    trace.growth_rate.peaks_identification, "first_valley_index"
+                ):
+                    setattr(
+                        trace.growth_rate.peaks_identification, "first_valley_index", 1
+                    )
+                if not getattr(
+                    trace.growth_rate.peaks_identification, "last_valley_index"
+                ):
+                    setattr(
+                        trace.growth_rate.peaks_identification, "last_valley_index", 5
+                    )
+                if not getattr(trace.growth_rate, "reflectance_trace"):
+                    setattr(trace.growth_rate, "reflectance_trace", "Smoothed")
+                if getattr(trace.growth_rate, "reflectance_trace") == "Raw":
+                    chosen_trace = trace.raw_intensity
+                if getattr(trace.growth_rate, "reflectance_trace") == "Smoothed":
+                    chosen_trace = trace.smoothed_intensity
+                if getattr(trace.growth_rate, "reflectance_trace") == "Autocorrelated":
+                    chosen_trace = trace.autocorrelated_intensity
+                # find peaks
+                peaks_indices, _ = find_peaks(
+                    chosen_trace,
+                    distance=trace.growth_rate.peaks_identification.minimum_peaks_distance,
+                )
+                # find valleys
+                valleys_indices, _ = find_peaks(
+                    -chosen_trace,
+                    distance=trace.growth_rate.peaks_identification.minimum_peaks_distance,
+                )
+
+                # fill quantities in the section
+                trace.growth_rate.peaks_identification.peaks_abscissa = self.results[
+                    0
+                ].process_time[
+                    peaks_indices[
+                        trace.growth_rate.peaks_identification.first_peak_index : trace.growth_rate.peaks_identification.last_peak_index
                     ]
-                    trace.peaks = trace.raw_intensity[peaks_indices]
-                    trace.valleys = trace.raw_intensity[valleys_indices]
-                    # find the peak-to-peak distance
-                    peak_to_peak = np.diff(trace.peaks)
-                    valley_to_valley = np.diff(trace.valleys)
-                    # calculate the growth rate
-                    trace.growth_rate = GrowthRate()
-                    trace.growth_rate.growth_period = np.mean(
-                        np.concatenate((peak_to_peak, valley_to_valley))
-                    )
+                ]
+                trace.growth_rate.peaks_identification.valleys_abscissa = self.results[
+                    0
+                ].process_time[
+                    valleys_indices[
+                        trace.growth_rate.peaks_identification.first_valley_index : trace.growth_rate.peaks_identification.last_valley_index
+                    ]
+                ]
+                trace.growth_rate.peaks_identification.peaks_ordinate = trace.smoothed_intensity[
+                    peaks_indices[
+                        trace.growth_rate.peaks_identification.first_peak_index : trace.growth_rate.peaks_identification.last_peak_index
+                    ]
+                ]
+                trace.growth_rate.peaks_identification.valleys_ordinate = trace.smoothed_intensity[
+                    valleys_indices[
+                        trace.growth_rate.peaks_identification.first_valley_index : trace.growth_rate.peaks_identification.last_valley_index
+                    ]
+                ]
+                # find the peak-to-peak distance
+                peak_to_peak = np.diff(
+                    trace.growth_rate.peaks_identification.peaks_abscissa.magnitude
+                )
+                valley_to_valley = np.diff(
+                    trace.growth_rate.peaks_identification.valleys_abscissa.magnitude
+                )
+                # calculate the growth rate
+                trace.growth_rate.growth_period = np.mean(
+                    np.concatenate([peak_to_peak, valley_to_valley])
+                )
+                if getattr(trace.growth_rate, "recalculate_on_save") not in [
+                    "No",
+                    "Yes",
+                ]:
+                    setattr(trace.growth_rate, "recalculate_on_save", "Yes")
+                if (
+                    refractive_index is not None
+                    and getattr(trace.growth_rate, "recalculate_on_save") == "Yes"
+                ):
                     trace.growth_rate.growth_rate = trace.wavelength / (
                         refractive_index * trace.growth_rate.growth_period
                     )
@@ -414,13 +594,27 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     trace.autocorrelation_starting_point + trace.autocorrelation_period
                 )
                 single_trace_fig = make_subplots(
-                    rows=2,
+                    rows=3,
                     cols=1,
                     shared_xaxes=True,
                     vertical_spacing=0.03,
                     subplot_titles=["Reflectance"],
                 )
                 go_object = go.Scattergl(
+                    x=self.results[0].process_time,
+                    y=trace.smoothed_intensity,
+                    mode="lines+markers",
+                    line={"width": 2},
+                    marker={"size": 2},
+                    # marker=dict(
+                    #     color=np.log10(self.results[0].intensity),
+                    #     colorscale="inferno",
+                    #     line_width=0,
+                    #     showscale=True,
+                    # ),
+                    name=f"{trace.wavelength.to('nanometer').magnitude:.2f} nm",
+                )
+                go_object_raw = go.Scattergl(
                     x=self.results[0].process_time,
                     y=trace.raw_intensity,
                     mode="lines+markers",
@@ -432,33 +626,41 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     #     line_width=0,
                     #     showscale=True,
                     # ),
-                    name=f"{trace.wavelength.magnitude} nm",
+                    name=f"{trace.wavelength.to('nanometer').magnitude:.2f} nm",
                 )
                 positions = np.concatenate(
-                    (trace.peaks_positions, trace.valleys_positions)
+                    (
+                        trace.growth_rate.peaks_identification.peaks_abscissa,
+                        trace.growth_rate.peaks_identification.valleys_abscissa,
+                    )
                 )
-                peak_intensities = np.concatenate((trace.peaks, trace.valleys))
+                peak_intensities = np.concatenate(
+                    (
+                        trace.growth_rate.peaks_identification.peaks_ordinate,
+                        trace.growth_rate.peaks_identification.valleys_ordinate,
+                    )
+                )
                 go_object_peaks = go.Scattergl(
                     x=positions,
                     y=peak_intensities,
                     mode="markers",
-                    marker={"size": 15},
+                    marker={"size": 10},
                     name="peaks",
                 )
                 x_slice = self.results[0].process_time[trace_min:trace_max]
-                y_slice = trace.raw_intensity[trace_min:trace_max]
+                y_slice = trace.smoothed_intensity[trace_min:trace_max]
                 single_trace_fig.add_trace(
                     go_object,
                     row=1,
                     col=1,
                 )
                 single_trace_fig.add_trace(
-                    go_object_peaks,
-                    row=1,
+                    go_object_raw,
+                    row=3,
                     col=1,
                 )
                 overview_fig.add_trace(
-                    go_object,
+                    go_object_raw,
                     row=1,
                     col=1,
                 )
@@ -474,13 +676,24 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                         mode="lines+markers",
                         line={"width": 2},
                         marker={"size": 2},
-                        name=f"Autocorr. {trace.wavelength.magnitude} nm",
+                        name=f"Autocorr. {trace.wavelength.magnitude:.2f} nm",
                     )
                     single_trace_fig.add_trace(
                         go_object,
                         row=2,
                         col=1,
                     )
+                if getattr(trace.growth_rate, "reflectance_trace") == "Raw":
+                    plot_row = 3
+                if getattr(trace.growth_rate, "reflectance_trace") == "Smoothed":
+                    plot_row = 1
+                if getattr(trace.growth_rate, "reflectance_trace") == "Autocorrelated":
+                    plot_row = 2
+                single_trace_fig.add_trace(
+                    go_object_peaks,
+                    row=plot_row,
+                    col=1,
+                )
                 single_trace_fig.update_layout(
                     height=800,
                     # width=1000,
@@ -502,7 +715,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     col=1,
                 )
                 single_trace_fig.update_xaxes(
-                    title_text="Time [s]",
+                    title_text="",
                     autorange=False,
                     range=[trace_min, trace_max],
                     fixedrange=False,
@@ -515,8 +728,22 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     row=2,
                     col=1,
                 )
+                single_trace_fig.update_xaxes(
+                    title_text="Time [s]",
+                    autorange=False,
+                    range=[trace_min, trace_max],
+                    fixedrange=False,
+                    ticks="",  # "outside",
+                    showticklabels=True,
+                    showline=True,
+                    linewidth=1,
+                    linecolor="black",
+                    mirror=True,
+                    row=3,
+                    col=1,
+                )
                 single_trace_fig.update_yaxes(
-                    title_text="Intensity [a. u.]",
+                    title_text="Smoothed Int. [a. u.]",
                     fixedrange=False,
                     ticks="",  # "outside",
                     showticklabels=True,
@@ -539,6 +766,18 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     row=2,
                     col=1,
                 )
+                single_trace_fig.update_yaxes(
+                    title_text="Raw Int. [a. u.]",
+                    fixedrange=False,
+                    ticks="",  # "outside",
+                    showticklabels=True,
+                    showline=True,
+                    linewidth=1,
+                    linecolor="black",
+                    mirror=True,
+                    row=3,
+                    col=1,
+                )
                 single_trace_fig_json = single_trace_fig.to_plotly_json()
                 single_trace_fig_json["config"] = {
                     "displayModeBar": True,
@@ -548,7 +787,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 }
                 trace.figures = [
                     PlotlyFigure(
-                        label=f"{trace.wavelength.magnitude} nm",
+                        label=f"{trace.wavelength.to('nanometer').magnitude:.2f} nm",
                         index=1,
                         figure=single_trace_fig_json,
                     )
@@ -572,7 +811,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                 ),
             )
             overview_fig.update_yaxes(
-                title_text="Intensity [a.u.]",
+                title_text="Raw Intensity [a.u.]",
                 fixedrange=True,
                 ticks="",  # "outside",
                 showticklabels=True,
