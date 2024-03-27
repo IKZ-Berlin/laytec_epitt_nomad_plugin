@@ -166,8 +166,9 @@ class GrowthRate(ArchiveSection):
     reflectance_trace = Quantity(
         type=MEnum(
             "Raw",
-            "Smoothed",
+            "Smoothed Raw",
             "Autocorrelated",
+            "Smoothed Autocorrelated",
         ),
         a_eln=ELNAnnotation(
             component="RadioEnumEditQuantity",
@@ -202,7 +203,7 @@ class GrowthRate(ArchiveSection):
         unit="meter/second",
         a_eln=ELNAnnotation(
             component="NumberEditQuantity",
-            defaultDisplayUnit="nm/second",
+            defaultDisplayUnit="nanometer/hour",
         ),
     )
     peaks_identification = SubSection(section_def=FindPeaksParameters)
@@ -219,6 +220,10 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
             component="StringEditQuantity",
         ),
     )
+    rawfile_column_header = Quantity(
+        type=str,
+        description="Name of Reflectance ",
+    )
     wavelength = Quantity(
         type=np.dtype(np.float64),
         unit="meter",
@@ -228,9 +233,13 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
             defaultDisplayUnit="nanometer",
         ),
     )
-    rawfile_column_header = Quantity(
-        type=str,
-        description="Name of Reflectance ",
+    smoothing_window = Quantity(
+        type=np.int64,
+        default=30,
+        description="""
+        Averaging window for the smoothing function calculation.
+        """,
+        a_eln={"component": "NumberEditQuantity"},
     )
     autocorrelation_starting_point = Quantity(
         type=np.int64,
@@ -241,7 +250,7 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
         """,
         a_eln={"component": "NumberEditQuantity"},
     )
-    autocorrelation_period = Quantity(
+    autocorrelation_window = Quantity(
         type=np.int64,
         description="""
         Add this parameter and save to smoothen the reflectance trace.
@@ -255,14 +264,14 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
         shape=["*"],
         description="Normalized reflectance wavelength",
     )
-    smoothed_intensity = Quantity(
+    smoothed_raw_intensity = Quantity(
         type=np.dtype(np.float64),
         shape=["*"],
-        description="Normalized and smoothed reflectance wavelength. The smoothing is done with a moving average filter from Pandas package [.rolling(30).mean()].",
+        description="Normalized and smoothed reflectance wavelength. The smoothing is done with a moving average filter from Pandas package [.rolling(smoothing_window).mean()].",
         a_plotly_express={
             "method": "line",
             "x": "#/data/results/0/process_time",
-            "y": "#smoothed_intensity",
+            "y": "#smoothed_raw_intensity",
         },
     )
     autocorrelated_intensity = Quantity(
@@ -272,7 +281,15 @@ class ReflectanceWavelengthTransient(PlotSection, ArchiveSection):
         with a autocorrelation algorythm implemented in the statsmodels package.
         """,
         shape=["*"],
-        unit="seconds",
+    )
+    smoothed_autocorrelated_intensity = Quantity(
+        type=np.dtype(np.float64),
+        description="""
+        Normalized reflectance wavelength processed
+        with a autocorrelation algorythm implemented in the statsmodels package.
+        The smoothing is done with a moving average filter from Pandas package [.rolling(smoothing_window).mean()].
+        """,
+        shape=["*"],
     )
     refractive_index = SubSection(section_def=RefractiveIndex)
     growth_rate = SubSection(section_def=GrowthRate)
@@ -416,14 +433,14 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
             for trace in self.results[0].reflectance_wavelengths:
                 if not getattr(trace, "autocorrelation_starting_point"):
                     setattr(trace, "autocorrelation_starting_point", 0)
-                if not getattr(trace, "autocorrelation_period"):
-                    setattr(trace, "autocorrelation_period", len(trace.raw_intensity))
+                if not getattr(trace, "autocorrelation_window"):
+                    setattr(trace, "autocorrelation_window", len(trace.raw_intensity))
                 start = trace.autocorrelation_starting_point
-                period = trace.autocorrelation_period
+                period = trace.autocorrelation_window
                 if period is not None and start is not None:
-                    trace.smoothed_intensity = (
+                    trace.smoothed_raw_intensity = (
                         pd.Series(trace.raw_intensity[start : (start + period)])
-                        .rolling(30)
+                        .rolling(trace.smoothing_window)
                         .mean()
                     )
 
@@ -431,15 +448,22 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
             for trace in self.results[0].reflectance_wavelengths:
                 if not getattr(trace, "autocorrelation_starting_point"):
                     setattr(trace, "autocorrelation_starting_point", 0)
-                if not getattr(trace, "autocorrelation_period"):
-                    setattr(trace, "autocorrelation_period", len(trace.raw_intensity))
+                if not getattr(trace, "autocorrelation_window"):
+                    setattr(trace, "autocorrelation_window", len(trace.raw_intensity))
                 start = trace.autocorrelation_starting_point
-                period = trace.autocorrelation_period
+                period = trace.autocorrelation_window
                 if period is not None and start is not None:
                     trace.autocorrelated_intensity = sm.tsa.acf(
                         trace.raw_intensity[start : (start + period)],
                         nlags=period,
                         fft=False,
+                    )
+                    trace.smoothed_autocorrelated_intensity = (
+                        pd.Series(
+                            trace.autocorrelated_intensity[start : (start + period)]
+                        )
+                        .rolling(trace.smoothing_window)
+                        .mean()
                     )
 
                 # growth rate calculation
@@ -501,13 +525,18 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                         trace.growth_rate.peaks_identification, "last_valley_index", 5
                     )
                 if not getattr(trace.growth_rate, "reflectance_trace"):
-                    setattr(trace.growth_rate, "reflectance_trace", "Smoothed")
+                    setattr(trace.growth_rate, "reflectance_trace", "Smoothed Raw")
                 if getattr(trace.growth_rate, "reflectance_trace") == "Raw":
                     chosen_trace = trace.raw_intensity
-                if getattr(trace.growth_rate, "reflectance_trace") == "Smoothed":
-                    chosen_trace = trace.smoothed_intensity
+                if getattr(trace.growth_rate, "reflectance_trace") == "Smoothed Raw":
+                    chosen_trace = trace.smoothed_raw_intensity
                 if getattr(trace.growth_rate, "reflectance_trace") == "Autocorrelated":
                     chosen_trace = trace.autocorrelated_intensity
+                if (
+                    getattr(trace.growth_rate, "reflectance_trace")
+                    == "Smoothed Autocorrelated"
+                ):
+                    chosen_trace = trace.smoothed_autocorrelated_intensity
                 # find peaks
                 peaks_indices, _ = find_peaks(
                     chosen_trace,
@@ -534,12 +563,12 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                         trace.growth_rate.peaks_identification.first_valley_index : trace.growth_rate.peaks_identification.last_valley_index
                     ]
                 ]
-                trace.growth_rate.peaks_identification.peaks_ordinate = trace.smoothed_intensity[
+                trace.growth_rate.peaks_identification.peaks_ordinate = chosen_trace[
                     peaks_indices[
                         trace.growth_rate.peaks_identification.first_peak_index : trace.growth_rate.peaks_identification.last_peak_index
                     ]
                 ]
-                trace.growth_rate.peaks_identification.valleys_ordinate = trace.smoothed_intensity[
+                trace.growth_rate.peaks_identification.valleys_ordinate = chosen_trace[
                     valleys_indices[
                         trace.growth_rate.peaks_identification.first_valley_index : trace.growth_rate.peaks_identification.last_valley_index
                     ]
@@ -591,28 +620,14 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
             for trace in self.results[0].reflectance_wavelengths:
                 trace_min = trace.autocorrelation_starting_point
                 trace_max = (
-                    trace.autocorrelation_starting_point + trace.autocorrelation_period
+                    trace.autocorrelation_starting_point + trace.autocorrelation_window
                 )
                 single_trace_fig = make_subplots(
-                    rows=3,
+                    rows=4,
                     cols=1,
                     shared_xaxes=True,
                     vertical_spacing=0.03,
                     subplot_titles=["Reflectance"],
-                )
-                go_object = go.Scattergl(
-                    x=self.results[0].process_time,
-                    y=trace.smoothed_intensity,
-                    mode="lines+markers",
-                    line={"width": 2},
-                    marker={"size": 2},
-                    # marker=dict(
-                    #     color=np.log10(self.results[0].intensity),
-                    #     colorscale="inferno",
-                    #     line_width=0,
-                    #     showscale=True,
-                    # ),
-                    name=f"{trace.wavelength.to('nanometer').magnitude:.2f} nm",
                 )
                 go_object_raw = go.Scattergl(
                     x=self.results[0].process_time,
@@ -628,35 +643,9 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     # ),
                     name=f"{trace.wavelength.to('nanometer').magnitude:.2f} nm",
                 )
-                positions = np.concatenate(
-                    (
-                        trace.growth_rate.peaks_identification.peaks_abscissa,
-                        trace.growth_rate.peaks_identification.valleys_abscissa,
-                    )
-                )
-                peak_intensities = np.concatenate(
-                    (
-                        trace.growth_rate.peaks_identification.peaks_ordinate,
-                        trace.growth_rate.peaks_identification.valleys_ordinate,
-                    )
-                )
-                go_object_peaks = go.Scattergl(
-                    x=positions,
-                    y=peak_intensities,
-                    mode="markers",
-                    marker={"size": 10},
-                    name="peaks",
-                )
-                x_slice = self.results[0].process_time[trace_min:trace_max]
-                y_slice = trace.smoothed_intensity[trace_min:trace_max]
-                single_trace_fig.add_trace(
-                    go_object,
-                    row=1,
-                    col=1,
-                )
                 single_trace_fig.add_trace(
                     go_object_raw,
-                    row=3,
+                    row=1,
                     col=1,
                 )
                 overview_fig.add_trace(
@@ -664,39 +653,92 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     row=1,
                     col=1,
                 )
+                go_object_smoothed_raw = go.Scattergl(
+                    x=self.results[0].process_time,
+                    y=trace.smoothed_raw_intensity,
+                    mode="lines+markers",
+                    line={"width": 2},
+                    marker={"size": 2},
+                    name=f"{trace.wavelength.to('nanometer').magnitude:.2f} nm",
+                )
+                single_trace_fig.add_trace(
+                    go_object_smoothed_raw,
+                    row=2,
+                    col=1,
+                )
                 if (
                     trace.autocorrelated_intensity is not None
                     and trace.autocorrelated_intensity.any()
                 ):
                     x_slice = self.results[0].process_time[trace_min:trace_max]
-                    y_slice = trace.autocorrelated_intensity[1:]
-                    go_object = go.Scattergl(
+                    y_slice_autocorr = trace.autocorrelated_intensity[1:]
+                    go_object_autocorr = go.Scattergl(
                         x=x_slice,
-                        y=y_slice,
+                        y=y_slice_autocorr,
                         mode="lines+markers",
                         line={"width": 2},
                         marker={"size": 2},
                         name=f"Autocorr. {trace.wavelength.magnitude:.2f} nm",
                     )
                     single_trace_fig.add_trace(
-                        go_object,
-                        row=2,
+                        go_object_autocorr,
+                        row=3,
                         col=1,
                     )
+                    y_slice_smooth_autocorr = trace.smoothed_autocorrelated_intensity[
+                        1:
+                    ]
+                    go_object_smooth_autocorr = go.Scattergl(
+                        x=x_slice,
+                        y=y_slice_smooth_autocorr,
+                        mode="lines+markers",
+                        line={"width": 2},
+                        marker={"size": 2},
+                        name=f"Smoothed Autocorr. {trace.wavelength.magnitude:.2f} nm",
+                    )
+                    single_trace_fig.add_trace(
+                        go_object_smooth_autocorr,
+                        row=4,
+                        col=1,
+                    )
+                go_object_max = go.Scattergl(
+                    x=trace.growth_rate.peaks_identification.peaks_abscissa,
+                    y=trace.growth_rate.peaks_identification.peaks_ordinate,
+                    mode="markers",
+                    marker={"size": 10, "color": "blue"},
+                    name="peaks",
+                )
+                go_object_min = go.Scattergl(
+                    x=trace.growth_rate.peaks_identification.valleys_abscissa,
+                    y=trace.growth_rate.peaks_identification.valleys_ordinate,
+                    mode="markers",
+                    marker={"size": 10, "color": "red"},
+                    name="peaks",
+                )
                 if getattr(trace.growth_rate, "reflectance_trace") == "Raw":
-                    plot_row = 3
-                if getattr(trace.growth_rate, "reflectance_trace") == "Smoothed":
                     plot_row = 1
-                if getattr(trace.growth_rate, "reflectance_trace") == "Autocorrelated":
+                if getattr(trace.growth_rate, "reflectance_trace") == "Smoothed Raw":
                     plot_row = 2
+                if getattr(trace.growth_rate, "reflectance_trace") == "Autocorrelated":
+                    plot_row = 3
+                if (
+                    getattr(trace.growth_rate, "reflectance_trace")
+                    == "Smoothed Autocorrelated"
+                ):
+                    plot_row = 4
                 single_trace_fig.add_trace(
-                    go_object_peaks,
+                    go_object_max,
+                    row=plot_row,
+                    col=1,
+                )
+                single_trace_fig.add_trace(
+                    go_object_min,
                     row=plot_row,
                     col=1,
                 )
                 single_trace_fig.update_layout(
                     template="plotly_white",
-                    height=800,
+                    height=1000,
                     # width=1000,
                     showlegend=False,
                     dragmode="pan",
@@ -730,7 +772,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     col=1,
                 )
                 single_trace_fig.update_xaxes(
-                    title_text="Time [s]",
+                    title_text="",
                     autorange=False,
                     range=[trace_min, trace_max],
                     fixedrange=False,
@@ -743,8 +785,22 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     row=3,
                     col=1,
                 )
+                single_trace_fig.update_xaxes(
+                    title_text="Time [s]",
+                    autorange=False,
+                    range=[trace_min, trace_max],
+                    fixedrange=False,
+                    ticks="",  # "outside",
+                    showticklabels=True,
+                    showline=True,
+                    linewidth=1,
+                    linecolor="black",
+                    mirror=True,
+                    row=4,
+                    col=1,
+                )
                 single_trace_fig.update_yaxes(
-                    title_text="Smoothed Int. [a. u.]",
+                    title_text="Raw [a. u.]",
                     fixedrange=False,
                     ticks="",  # "outside",
                     showticklabels=True,
@@ -756,7 +812,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     col=1,
                 )
                 single_trace_fig.update_yaxes(
-                    title_text="Autocorrelated Int. [a. u.]",
+                    title_text="Smooth Raw [a. u.]",
                     fixedrange=False,
                     ticks="",  # "outside",
                     showticklabels=True,
@@ -768,7 +824,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     col=1,
                 )
                 single_trace_fig.update_yaxes(
-                    title_text="Raw Int. [a. u.]",
+                    title_text="Autocorrelated [a. u.]",
                     fixedrange=False,
                     ticks="",  # "outside",
                     showticklabels=True,
@@ -777,6 +833,18 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     linecolor="black",
                     mirror=True,
                     row=3,
+                    col=1,
+                )
+                single_trace_fig.update_yaxes(
+                    title_text="Smooth Autocorr. [a. u.]",
+                    fixedrange=False,
+                    ticks="",  # "outside",
+                    showticklabels=True,
+                    showline=True,
+                    linewidth=1,
+                    linecolor="black",
+                    mirror=True,
+                    row=4,
                     col=1,
                 )
                 single_trace_fig_json = single_trace_fig.to_plotly_json()
