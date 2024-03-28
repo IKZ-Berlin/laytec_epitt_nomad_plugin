@@ -175,7 +175,7 @@ class GrowthRate(ArchiveSection):
         ),
         description="Select the reflectance trace to calculate the growth rate.",
     )
-    growth_period = Quantity(
+    fabry_perot_oscillation_period = Quantity(
         type=np.dtype(np.float64),
         unit="second",
         description="""
@@ -581,7 +581,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     trace.growth_rate.peaks_identification.valleys_abscissa.magnitude
                 )
                 # calculate the growth rate
-                trace.growth_rate.growth_period = np.mean(
+                trace.growth_rate.fabry_perot_oscillation_period = np.mean(
                     np.concatenate([peak_to_peak, valley_to_valley])
                 )
                 if getattr(trace.growth_rate, "recalculate_on_save") not in [
@@ -594,7 +594,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     and getattr(trace.growth_rate, "recalculate_on_save") == "Yes"
                 ):
                     trace.growth_rate.growth_rate = trace.wavelength / (
-                        refractive_index * trace.growth_rate.growth_period
+                        2 * refractive_index * trace.growth_rate.fabry_perot_oscillation_period
                     )
 
         # plots
