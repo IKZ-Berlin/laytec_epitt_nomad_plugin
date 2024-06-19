@@ -54,8 +54,10 @@ from nomad_measurements import (
 m_package = Package(name="LayTec EpiTT Schema")
 
 
-class IKZLayTecEpiTTCategory(EntryDataCategory):
-    m_def = Category(label="LayTec EpiTT", categories=[EntryDataCategory])
+
+configuration = config.get_plugin_entry_point("laytec_epitt_plugin:laytec_schema")
+
+m_package = SchemaPackage()
 
 
 class RefractiveIndex(ArchiveSection):
