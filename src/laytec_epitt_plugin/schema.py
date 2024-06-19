@@ -362,7 +362,6 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
 
     m_def = Section(
         a_eln={"lane_width": "600px", "hide": ["steps"]},
-        categories=[IKZLayTecEpiTTCategory],
         label="EpiTT Measurement",
         a_template=dict(
             instruments=[dict(name="LayTec_EpiTT", lab_id="LayTec_EpiTT_MOVPE_Ga2O3")],
