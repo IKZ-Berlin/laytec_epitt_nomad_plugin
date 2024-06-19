@@ -28,7 +28,7 @@ from nomad.config import config
 
 from nomad.metainfo import (
     Quantity,
-    Package,
+    SchemaPackage,
     MEnum,
     SubSection,
     Section,
