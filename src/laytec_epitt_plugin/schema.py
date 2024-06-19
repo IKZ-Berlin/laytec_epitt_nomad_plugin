@@ -53,10 +53,6 @@ from nomad_measurements import (
     ProcessReference,
 )
 
-m_package = Package(name="LayTec EpiTT Schema")
-
-
-
 configuration = config.get_plugin_entry_point("laytec_epitt_plugin:laytec_schema")
 
 m_package = SchemaPackage()
