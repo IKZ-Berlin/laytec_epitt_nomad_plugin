@@ -40,7 +40,6 @@ from nomad.datamodel.datamodel import EntryArchive, EntryMetadata
 from nomad_measurements import ProcessReference
 from laytec_epitt_plugin.schema import (
     LayTecEpiTTMeasurement,
-    IKZLayTecEpiTTCategory,
     ReflectanceWavelengthTransient,
     LayTecEpiTTMeasurementResult,
     MeasurementSettings,
@@ -138,7 +137,7 @@ class RawFileLayTecEpiTT(EntryData):
     Contains the raw file from LayTecEpiTT in situ monitoring
     """
 
-    m_def = Section(categories=[IKZLayTecEpiTTCategory])
+    m_def = Section()
     measurement = Quantity(
         type=LayTecEpiTTMeasurement,
         a_eln=ELNAnnotation(
