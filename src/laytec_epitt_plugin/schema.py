@@ -24,6 +24,8 @@ import plotly.graph_objs as go
 from statsmodels import api as sm
 from scipy.signal import find_peaks
 
+from nomad.config import config
+
 from nomad.metainfo import (
     Quantity,
     Package,
