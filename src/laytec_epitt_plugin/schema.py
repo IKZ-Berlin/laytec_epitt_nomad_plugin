@@ -408,7 +408,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
         logger.info("Executed LayTecEpiTTMeasurement normalizer.")
 
         # reference the growth process entry
-        if self.process.name:
+        if getattr(getattr(self, 'process', None), 'name', None):
             self.process.normalize(archive, logger)
             logger.info("Executed LayTecEpiTTMeasurement.process normalizer.")
             if hasattr(self.process.reference, "grown_sample"):
@@ -427,7 +427,7 @@ class LayTecEpiTTMeasurement(InSituMeasurement, PlotSection, EntryData):
                     + "Please upload a growth process file and reprocess."
                 )
 
-        if self.results[0]:
+        if getattr(self, 'results', None):
             # noise smoothening with moving average
             for trace in self.results[0].reflectance_wavelengths:
                 if not getattr(trace, "autocorrelation_starting_point"):
