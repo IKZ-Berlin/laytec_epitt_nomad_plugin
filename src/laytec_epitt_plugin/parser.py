@@ -35,7 +35,7 @@ from nomad.metainfo import Quantity, Section
 from nomad.parsing import MatchingParser
 from nomad.units import ureg
 from nomad.utils import hash
-from nomad_measurements import ProcessReference
+from nomad_measurements.general import ProcessReference
 
 from laytec_epitt_plugin.schema import (
     LayTecEpiTTMeasurement,
@@ -260,7 +260,8 @@ class EpiTTParser(MatchingParser):
                         transient_object.rawfile_column_header = wl
                         transient_object.raw_intensity = spectrum / spectrum[0]
 
-                        # MANUAL refractive index assignment (until we have ELLIPSOMETRY data in the archive)
+                        # MANUAL refractive index assignment
+                        # (until we have ELLIPSOMETRY data in the archive)
                         refractive_index = 1.0
                         if transient_object.name == '633':
                             # ELLIPSOMETRY measurement at 800 degree celsius
@@ -276,7 +277,8 @@ class EpiTTParser(MatchingParser):
                                 value=refractive_index
                             )
 
-                        # smoothed_intesity is calculated in the LayTecEpiTTMeasurement normalizer
+                        # smoothed_intesity is calculated in the
+                        # LayTecEpiTTMeasurement normalizer
                         results.reflectance_wavelengths.append(transient_object)
                 measurement_data.results = [results]
             filetype = 'yaml'
