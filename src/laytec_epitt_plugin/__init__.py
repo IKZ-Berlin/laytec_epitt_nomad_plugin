@@ -15,12 +15,11 @@
 # limitations under the License.
 #
 
-from nomad.config.models.plugins import SchemaPackageEntryPoint, ParserEntryPoint
+from nomad.config.models.plugins import ParserEntryPoint, SchemaPackageEntryPoint
 from pydantic import Field
 
 
 class LayTecEntryPoint(SchemaPackageEntryPoint):
-
     def load(self):
         from laytec_epitt_plugin.schema import m_package
 
@@ -34,7 +33,6 @@ laytec_schema = LayTecEntryPoint(
 
 
 class LayTecParserEntryPoint(ParserEntryPoint):
-
     def load(self):
         from laytec_epitt_plugin.parser import EpiTTParser
 
